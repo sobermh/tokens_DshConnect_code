@@ -10,12 +10,8 @@
   <p><strong>Connecting DeepSeek Harness</strong></p>
 
   <p>
-    <img src="https://dsh-im-random-badge.xmanrui-dsh-im.workers.dev" alt="滑动变祖器：今天是梁子或今天是梁圣（随机）">
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/xmanrui/dsh-im" alt="MIT 许可证"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshIm_code" alt="MIT 许可证"></a>
     <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-5865f2" alt="DeepSeek Harness">
-    <a href="https://dshfind.com/zh/plugins/xmanrui/dsh-im?ref=badge"><img src="https://dshfind.com/api/badge/xmanrui/dsh-im?lang=zh" alt="dshfind"></a>
-    <a href="https://dshfind.com/zh/plugins/xmanrui/dsh-im"><img src="https://img.shields.io/badge/dshfind-%E5%88%86%E7%B1%BB%E7%AC%AC%E4%B8%80-d97706" alt="dshfind: 分类第一"></a>
-    <a href="https://dshfind.com/zh/plugins/xmanrui/dsh-im?ref=badge"><img src="https://dshfind.com/api/badge/xmanrui/dsh-im?metric=downloads&amp;lang=zh" alt="dshfind downloads"></a>
   </p>
 
   <p>
@@ -34,6 +30,8 @@
 </div>
 
 ---
+
+> 本仓库是 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 的 Tokens 维护分支，运行包名为 `@tokens/dsh-im`。原项目作者、历史贡献和 MIT 许可证完整保留；本分支用于 TokensHarness 的独立构建、发布与后续演进。
 
 ## 简介
 
@@ -96,7 +94,7 @@ Heartbeat 成功响应必须是 JSON：`{"ok":true,"protocolVersion":"office-har
 推荐从 npm 安装已发布的稳定版本：
 
 ```sh
-dsh plugin --profile web add -w @xmanrui/dsh-im
+dsh plugin --profile web add -w @tokens/dsh-im
 ```
 
 重启 `dsh web`，然后打开「设置 → 插件 → IM机器人」。
@@ -104,7 +102,7 @@ dsh plugin --profile web add -w @xmanrui/dsh-im
 如需试用尚未发布到 npm 的最新代码，可以改用 GitHub 源安装器：
 
 ```sh
-npx -y github:xmanrui/dsh-im install
+npx -y github:sobermh/tokens_DshIm_code install
 ```
 
 GitHub 源安装会直接拉取并构建 Git 依赖；pnpm 10 及以上版本可能要求先在 profile 的 `pnpm-workspace.yaml` 中允许该依赖执行构建脚本。普通用户建议优先使用 npm 稳定版。
@@ -235,7 +233,7 @@ node bin/dsh-im.mjs install --source .
 IM 管理 RPC 默认仅接受回环浏览器。如果 Web profile 在受信任的局域网内对外提供服务，可在该 profile 的 `cordis.patch.yml` 中显式开放给 Connection 已信任的 Host authority：
 
 ```yaml
-- id: xmanrui-dsh-im
+- id: tokens-dsh-im
   config:
     rpcAuthority: trusted-host
 ```
@@ -247,7 +245,7 @@ IM 管理 RPC 默认仅接受回环浏览器。如果 Web profile 在受信任�
 机器人发出的聊天消息默认使用中文。要切换为英文，在插件配置中设置 `language: en`（也接受 `en-US`、`english`），或设置环境变量 `DSH_IM_LANGUAGE=en`：
 
 ```yaml
-- id: xmanrui-dsh-im
+- id: tokens-dsh-im
   config:
     language: en
 ```

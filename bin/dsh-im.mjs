@@ -5,8 +5,8 @@ import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const PACKAGE_NAME = '@xmanrui/dsh-im';
-const DEFAULT_SOURCE = 'github:xmanrui/dsh-im';
+const PACKAGE_NAME = '@tokens/dsh-im';
+const DEFAULT_SOURCE = 'github:sobermh/tokens_DshIm_code';
 const LEGACY_PACKAGES = [
   '@xmanrui/dsh-feishu',
   '@xmanrui/dsh-weixin',
@@ -19,7 +19,7 @@ function usage() {
   dsh-im uninstall [--profile web]
 
 Examples:
-  npx -y github:xmanrui/dsh-im install
+  npx -y github:sobermh/tokens_DshIm_code install
   dsh-im install --source .`);
 }
 

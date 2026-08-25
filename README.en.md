@@ -9,12 +9,8 @@
   <p><strong>Connecting DeepSeek Harness</strong></p>
 
   <p>
-    <img src="https://dsh-im-random-badge.xmanrui-dsh-im.workers.dev" alt="滑动变祖器：今天是梁子或今天是梁圣（随机）">
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/xmanrui/dsh-im" alt="MIT license"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshIm_code" alt="MIT license"></a>
     <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-5865f2" alt="DeepSeek Harness">
-    <a href="https://dshfind.com/zh/plugins/xmanrui/dsh-im?ref=badge"><img src="https://dshfind.com/api/badge/xmanrui/dsh-im?lang=zh" alt="dshfind"></a>
-    <a href="https://dshfind.com/zh/plugins/xmanrui/dsh-im"><img src="https://img.shields.io/badge/dshfind-%E5%88%86%E7%B1%BB%E7%AC%AC%E4%B8%80-d97706" alt="dshfind: 分类第一"></a>
-    <a href="https://dshfind.com/zh/plugins/xmanrui/dsh-im?ref=badge"><img src="https://dshfind.com/api/badge/xmanrui/dsh-im?metric=downloads&amp;lang=zh" alt="dshfind downloads"></a>
   </p>
 
   <p>
@@ -33,6 +29,8 @@
 </div>
 
 ---
+
+> This repository is the Tokens-maintained fork of [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im), published as `@tokens/dsh-im`. The original authorship, contribution history, and MIT license are preserved; this fork supports independent TokensHarness builds, releases, and future development.
 
 ## Introduction
 
@@ -93,7 +91,7 @@ A successful heartbeat response must be JSON: `{"ok":true,"protocolVersion":"off
 Install the published stable release from npm (recommended):
 
 ```sh
-dsh plugin --profile web add -w @xmanrui/dsh-im
+dsh plugin --profile web add -w @tokens/dsh-im
 ```
 
 Restart `dsh web`, then open **Settings → Plugins → IM Bot**.
@@ -101,7 +99,7 @@ Restart `dsh web`, then open **Settings → Plugins → IM Bot**.
 To try the latest code before it is published to npm, use the GitHub-source installer instead:
 
 ```sh
-npx -y github:xmanrui/dsh-im install
+npx -y github:sobermh/tokens_DshIm_code install
 ```
 
 A GitHub-source installation fetches and builds a Git dependency directly. With pnpm 10 or newer, the profile may first need an `allowBuilds` entry in `pnpm-workspace.yaml`. Most users should prefer the stable npm release.
@@ -232,7 +230,7 @@ node bin/dsh-im.mjs install --source .
 IM management RPCs accept loopback browsers by default. When a Web profile is deliberately served on a trusted LAN, opt the plugin into the Host authorities already trusted by Connection in that profile's `cordis.patch.yml`:
 
 ```yaml
-- id: xmanrui-dsh-im
+- id: tokens-dsh-im
   config:
     rpcAuthority: trusted-host
 ```
@@ -244,7 +242,7 @@ IM management RPCs accept loopback browsers by default. When a Web profile is de
 Bot chat messages are in Chinese by default. To switch them to English, set `language: en` in the plugin config (also accepts `en-US` or `english`), or set the `DSH_IM_LANGUAGE=en` environment variable:
 
 ```yaml
-- id: xmanrui-dsh-im
+- id: tokens-dsh-im
   config:
     language: en
 ```

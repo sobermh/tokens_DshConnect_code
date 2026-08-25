@@ -48,6 +48,12 @@ const [client, host, patch, manifestText, lockText, hostSource, clientSource, ex
 const manifest = JSON.parse(manifestText);
 const lock = JSON.parse(lockText);
 
+if (manifest.name !== '@tokens/dsh-im'
+  || lock.name !== '@tokens/dsh-im'
+  || lock.packages?.['']?.name !== '@tokens/dsh-im') {
+  throw new Error('package metadata must use the @tokens/dsh-im identity');
+}
+
 // DSH runtime packages use module-local Symbol keys, so a second physical copy breaks Host lookup.
 const forbiddenDshDependency = /^@deepseek-ai\/dsh-/;
 const dependencySections = [
@@ -82,7 +88,7 @@ if (forbiddenDshLockPaths.length > 0) {
   );
 }
 
-if (!client.includes('id: "@xmanrui/dsh-im"')) {
+if (!client.includes('id: "@tokens/dsh-im"')) {
   throw new Error('client bundle does not register the dsh-im loader id');
 }
 if (!client.includes('id: "im"')
@@ -119,7 +125,9 @@ if (/@xmanrui\/dsh-(?:feishu|weixin|dingtalk)/.test(
 )) {
   throw new Error('source or package metadata still depends on an external channel plugin');
 }
-if (!patch.includes("name: '@xmanrui/dsh-im'") || /dsh-(?:feishu|weixin|dingtalk)/.test(patch)) {
+if (!patch.includes('id: tokens-dsh-im')
+  || !patch.includes("name: '@tokens/dsh-im'")
+  || /dsh-(?:feishu|weixin|dingtalk)/.test(patch)) {
   throw new Error('bundle patch must activate only dsh-im');
 }
 for (const name of ['@xmanrui/dsh-feishu', '@xmanrui/dsh-weixin', '@xmanrui/dsh-dingtalk']) {
@@ -161,7 +169,9 @@ if (manifest.bin?.['dsh-im'] !== 'bin/dsh-im.mjs') {
 if (/(?:from\s*|import\s*\(|require\s*\()\s*["'](?:@larksuiteoapi\/node-sdk|@whiskeysockets\/baileys|https-proxy-agent|protobufjs)(?:\/[^"']*)?["']/.test(host)) {
   throw new Error('host bundle must not import a bundled SDK, proxy agent, or protobufjs at runtime');
 }
-if ((executable.mode & 0o111) === 0) throw new Error('dsh-im CLI is not executable');
+if (process.platform !== 'win32' && (executable.mode & 0o111) === 0) {
+  throw new Error('dsh-im CLI is not executable');
+}
 if (/private-bot-token|must-be-rolled-back|DEEPSEEK_API_KEY=/.test(client + host)) {
   throw new Error('built artifacts contain a test or environment secret marker');
 }

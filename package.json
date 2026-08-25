@@ -1,5 +1,5 @@
 {
-  "name": "@xmanrui/dsh-im",
+  "name": "@tokens/dsh-im",
   "version": "2.3.0",
   "description": "把九种 IM 机器人和公网 AI Office 接入本机 DeepSeek Harness。 Connect nine IM channels and a public AI Office to a local DeepSeek Harness.",
   "keywords": [
@@ -30,16 +30,20 @@
     {
       "name": "C3H3-AI",
       "url": "https://github.com/C3H3-AI"
+    },
+    {
+      "name": "sobermh",
+      "url": "https://github.com/sobermh"
     }
   ],
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xmanrui/dsh-im.git"
+    "url": "git+https://github.com/sobermh/tokens_DshIm_code.git"
   },
-  "homepage": "https://github.com/xmanrui/dsh-im#readme",
-  "bugs": "https://github.com/xmanrui/dsh-im/issues",
+  "homepage": "https://github.com/sobermh/tokens_DshIm_code#readme",
+  "bugs": "https://github.com/sobermh/tokens_DshIm_code/issues",
   "publishConfig": {
     "access": "public"
   },
