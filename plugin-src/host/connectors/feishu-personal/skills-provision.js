@@ -1,0 +1,193 @@
+/**
+ * Materialize the official `lark-*` skills onto disk so custom sibling skills
+ * (jky-*, approval flows) can `Read ../lark-shared/SKILL.md` and friends.
+ *
+ * The official skills are embedded in the lark-cli binary at build time and are
+ * only exposed read-only through `lark-cli skills list` / `skills read`. Because
+ * we materialize from the SAME binary the plugin just provisioned, the skill
+ * content is always version-matched to the CLI — no hand-copying from GitHub,
+ * no drift. Files are written under the user-global dsh skill root
+ * (`$DSH_HOME/skills` or `~/.dsh/skills`), which the base skill loader watches
+ * and hot-reloads, so a freshly materialized skill becomes discoverable without
+ * a restart. A version-stamped manifest makes the whole thing idempotent and
+ * self-healing: it re-materializes only when the binary version changes or the
+ * sentinel `lark-shared/SKILL.md` goes missing, and it only ever touches the
+ * skill directories it owns — never the user's own skills.
+ * @module
+ */
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
+import { promisify } from 'node:util';
+import { createConcurrencyLimiter, retryAsync } from "./concurrency.js";
+import { ensureLarkcli, installedLarkVersion, probeLarkcli } from "./larkcli-provision.js";
+const execFileP = promisify(execFile);
+/** The skill every custom lark-* skill loads as its base; our self-heal sentinel. */
+const SENTINEL = 'lark-shared';
+/** Keep native CLI fan-out bounded while allowing independent reads to overlap. */
+const MAX_CLI_CONCURRENCY = 8;
+/** Names owned by this provisioner are one safe path segment in its namespace. */
+const MANAGED_SKILL_NAME = /^lark-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** Env that silences lark-cli's update/skills notices so output stays clean. */
+const QUIET_ENV = { LARKSUITE_CLI_NO_UPDATE_NOTIFIER: '1', LARKSUITE_CLI_NO_SKILLS_NOTIFIER: '1' };
+/** User-global dsh skill root, resolved the same way the base loader does. */
+function skillsRoot() {
+    const home = process.env['DSH_HOME'] ? resolve(process.env['DSH_HOME']) : join(homedir(), '.dsh');
+    return join(home, 'skills');
+}
+function stampFile(root) {
+    return join(root, '.lark-skills.json');
+}
+async function fileExists(path) {
+    try {
+        return (await stat(path)).isFile();
+    }
+    catch {
+        return false;
+    }
+}
+async function readStamp(root) {
+    try {
+        const value = JSON.parse(await readFile(stampFile(root), 'utf8'));
+        if (typeof value.larkVersion !== 'string'
+            || typeof value.materializedAt !== 'string'
+            || !Array.isArray(value.skills)
+            || !value.skills.every((name) => typeof name === 'string' && MANAGED_SKILL_NAME.test(name))) {
+            return undefined;
+        }
+        return value;
+    }
+    catch {
+        return undefined;
+    }
+}
+async function writeStamp(root, stamp) {
+    await writeFile(stampFile(root), `${JSON.stringify(stamp, null, 2)}\n`, { mode: 0o600 });
+}
+// ---- lark-cli invocation --------------------------------------------------
+const withCliSlot = createConcurrencyLimiter(MAX_CLI_CONCURRENCY);
+async function larkcli(bin, args) {
+    // lark-cli occasionally exits 1 with no stderr while many independent
+    // embedded-skill reads are in flight. These commands are read-only and
+    // idempotent, so release the slot and retry a bounded number of times.
+    return retryAsync(() => withCliSlot(async () => {
+        const { stdout } = await execFileP(bin, [...args], {
+            encoding: 'utf8',
+            timeout: 30_000,
+            maxBuffer: 32 * 1024 * 1024,
+            windowsHide: true,
+            env: { ...process.env, ...QUIET_ENV },
+        });
+        return stdout;
+    }), 3, 100);
+}
+/** Parse a lark-cli JSON envelope leniently (notices may precede the body). */
+function parseEnvelope(output) {
+    const start = output.indexOf('{');
+    const end = output.lastIndexOf('}');
+    if (start < 0 || end <= start)
+        throw new Error('lark-cli skills: no JSON object in output');
+    const map = JSON.parse(output.slice(start, end + 1));
+    if (map['ok'] === false) {
+        const error = map['error'];
+        const message = typeof error?.message === 'string' ? error.message : 'unknown error';
+        throw new Error(`lark-cli skills: ${message}`);
+    }
+    return map;
+}
+/** Names of all skills embedded in the binary. */
+async function listNames(bin) {
+    const map = parseEnvelope(await larkcli(bin, ['skills', 'list', '--json']));
+    const skills = Array.isArray(map['skills']) ? map['skills'] : [];
+    const names = skills
+        .map((s) => (typeof s.name === 'string' ? s.name : ''))
+        .filter((n) => n !== '');
+    for (const name of names)
+        assertManagedSkillName(name);
+    if (new Set(names).size !== names.length)
+        throw new Error('lark-cli skills: duplicate skill name');
+    return names;
+}
+/** Recursively enumerate all file entry paths under a skill (or subpath). */
+async function listFiles(bin, path) {
+    const map = parseEnvelope(await larkcli(bin, ['skills', 'list', path, '--json']));
+    const entries = Array.isArray(map['entries']) ? map['entries'] : [];
+    const files = await Promise.all(entries.map(async (raw) => {
+        const entry = raw;
+        if (typeof entry.path !== 'string' || entry.path === '')
+            return [];
+        if (entry.is_dir === true)
+            return listFiles(bin, entry.path);
+        return [entry.path];
+    }));
+    return files.flat();
+}
+/** Reject untrusted stamp/CLI names before they become filesystem paths. */
+export function assertManagedSkillName(name) {
+    if (!MANAGED_SKILL_NAME.test(name)) {
+        throw new Error(`lark-cli skills: invalid managed skill name: ${name}`);
+    }
+}
+/** Resolve one owned skill directory and prove it remains below `root`. */
+export function managedSkillDir(root, name) {
+    assertManagedSkillName(name);
+    const safeRoot = resolve(root);
+    const destination = resolve(safeRoot, name);
+    if (!destination.startsWith(safeRoot + sep)) {
+        throw new Error(`lark-cli skills: skill path escapes root: ${name}`);
+    }
+    return destination;
+}
+/** Materialize every file of one skill under `<root>/<name>/…`. */
+async function materializeSkill(bin, root, name) {
+    const base = managedSkillDir(root, name);
+    await Promise.all((await listFiles(bin, name)).map(async (entryPath) => {
+        // `skills read` accepts the full slash-form path; entries include the skill
+        // name as a prefix, which we strip to get the on-disk relative path.
+        const rel = entryPath.startsWith(`${name}/`) ? entryPath.slice(name.length + 1) : entryPath;
+        const dest = resolve(base, rel);
+        if (dest !== base && !dest.startsWith(base + sep)) {
+            throw new Error(`lark-cli skills: entry escapes skill dir: ${entryPath}`);
+        }
+        const content = await larkcli(bin, ['skills', 'read', entryPath]);
+        await mkdir(dirname(dest), { recursive: true });
+        await writeFile(dest, content, 'utf8');
+    }));
+}
+/** Remove skill dirs we previously owned that upstream no longer ships. */
+export async function pruneRemoved(root, oldNames, newNames) {
+    const keep = new Set(newNames);
+    for (const name of oldNames) {
+        if (!keep.has(name))
+            await rm(managedSkillDir(root, name), { recursive: true, force: true });
+    }
+}
+/**
+ * Ensure all official lark-* skills are materialized on disk, version-aligned
+ * with the provisioned binary. Idempotent: reuses the cached materialization
+ * unless the binary version changed, the sentinel skill is missing, or `force`
+ * is set. Only manages the lark-* skill dirs it owns; never touches user skills.
+ * @param force - re-materialize even when the version stamp already matches.
+ * @returns a summary of what happened (for logging).
+ */
+export async function ensureSkills(force = false) {
+    const bin = await ensureLarkcli();
+    const version = (await installedLarkVersion()) ?? probeLarkcli(bin) ?? 'unknown';
+    const root = skillsRoot();
+    await mkdir(root, { recursive: true });
+    const stamp = await readStamp(root);
+    const sentinelOk = await fileExists(join(root, SENTINEL, 'SKILL.md'));
+    if (!force && stamp?.larkVersion === version && sentinelOk) {
+        return { version, count: stamp.skills.length, root, skipped: true };
+    }
+    const names = await listNames(bin);
+    // Materialize the sentinel first so a mid-way failure still fixes the loop.
+    if (names.includes(SENTINEL))
+        await materializeSkill(bin, root, SENTINEL);
+    await Promise.all(names.filter((name) => name !== SENTINEL).map(async (name) => materializeSkill(bin, root, name)));
+    if (stamp !== undefined)
+        await pruneRemoved(root, stamp.skills, names);
+    await writeStamp(root, { larkVersion: version, skills: names, materializedAt: new Date().toISOString() });
+    return { version, count: names.length, root, skipped: false };
+}

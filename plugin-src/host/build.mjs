@@ -10,6 +10,8 @@ const sourceDirectory = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(sourceDirectory, '../..');
 const outputPath = resolve(packageRoot, 'lib/index.js');
 const externalRuntimePackages = [
+  '@deepseek-ai/dsh-credentials',
+  '@deepseek-ai/dsh-tools',
   '@tencent-connect/qqbot-connector',
   '@tencent-connect/qqbot-nodejs',
   '@wecom/aibot-node-sdk',

@@ -31,17 +31,17 @@
 
 ---
 
-> 本仓库是 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 的 Tokens 维护分支，运行包名为 `@tokens/dsh-im`。原项目作者、历史贡献和 MIT 许可证完整保留；本分支用于 TokensHarness 的独立构建、发布与后续演进。
+> 本仓库基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 演进，运行包名为 `@tokens/dsh-connect`。原项目作者、历史贡献和 MIT 许可证完整保留；当前版本将 IM、飞书个人账号与 AI Office 合并为 TokensHarness 的统一连接中心。
 
 ## 简介
 
-通过扫码、App Manifest 或已有机器人凭据把 IM 机器人接入 DeepSeek Harness，并让本机 Harness 主动连接公网 AI Office。一个插件、一个设置入口，统一管理九种 IM 渠道和 AI Office Connector。**每个 IM 渠道都支持接入多个机器人**，各机器人的连接状态、工作区和会话绑定彼此独立。
+通过扫码、App Manifest 或已有机器人凭据把 IM 机器人接入 DeepSeek Harness，通过 OAuth 连接飞书个人账号，并让本机 Harness 主动连接公网 AI Office。一个插件、一个「连接中心」设置入口，统一管理九种 IM 渠道、飞书个人账号和 AI Office Connector。**每个 IM 渠道都支持接入多个机器人**，各机器人的连接状态、工作区和会话绑定彼此独立。
 
-Connect IM bots to DeepSeek Harness by scanning a QR code, using an App Manifest, or entering existing bot credentials, and let the local Harness connect outward to a public AI Office. One plugin and one settings entry manage nine multi-bot IM channels and the AI Office Connector.
+Connect IM bots to DeepSeek Harness, authorize a personal Feishu account through OAuth, and let the local Harness connect outward to a public AI Office. One Connection Center entry manages nine multi-bot IM channels, Personal Feishu, and the AI Office Connector.
 
 ## 界面
 
-![IM机器人页面](docs/images/imbot.png)
+![连接中心页面](docs/images/imbot.png)
 
 ## 当前内置渠道
 
@@ -94,10 +94,10 @@ Heartbeat 成功响应必须是 JSON：`{"ok":true,"protocolVersion":"office-har
 推荐从 npm 安装已发布的稳定版本：
 
 ```sh
-dsh plugin --profile web add -w @tokens/dsh-im
+dsh plugin --profile web add -w @tokens/dsh-connect@2.4.2
 ```
 
-重启 `dsh web`，然后打开「设置 → 插件 → IM机器人」。
+重启 `dsh web`，然后打开「设置 → 插件 → 连接中心」。桌面端本地测试时，把 profile 改为 `desktop`，也可以把包名替换为本机 `.tgz` 的绝对路径。
 
 如需试用尚未发布到 npm 的最新代码，可以改用 GitHub 源安装器：
 
@@ -107,7 +107,7 @@ npx -y github:sobermh/tokens_DshIm_code install
 
 GitHub 源安装会直接拉取并构建 Git 依赖；pnpm 10 及以上版本可能要求先在 profile 的 `pnpm-workspace.yaml` 中允许该依赖执行构建脚本。普通用户建议优先使用 npm 稳定版。
 
-安装后，在对应渠道页面按照内置引导完成扫码或凭据配置。所有 Secret 和 Token 只提交给本机 Harness Host，并写入受保护的凭据存储；状态接口和机器人列表不会回传这些凭据。
+安装后，在对应渠道页面按照内置引导完成扫码、凭据配置或飞书个人账号 OAuth。所有 Secret 和 Token 只提交给本机 Harness Host，并写入受保护的凭据存储；状态接口和机器人列表不会回传这些凭据。升级安装器会移除旧的 `@tokens/dsh-im`、`@tokens/dsh-feishu-connect` 和 `@tokens/dsh-connect-ui` 包，同时保留原有机器人绑定和 `dsh-feishu` 个人授权数据。
 
 如果本机必须通过正向代理访问飞书，请在启动 `dsh web` 前把 `HTTPS_PROXY` 设置为包含协议的 HTTP 代理 URL（例如 `http://proxy:8080`；也支持小写 `https_proxy`，并兼容使用 `HTTP_PROXY` 作为回退），修改后重启 Host。飞书注册和凭据验证会复用 SDK 的代理感知 HTTP 客户端，消息长连接会显式通过这个代理建立 WebSocket；长连接目前不读取 `ALL_PROXY` 或 `NO_PROXY`。
 
@@ -213,11 +213,11 @@ Slack 桌面端若未注册同名的原生 Slash Command，会拦截直接以 `/
 
 ## 设计
 
-- Harness 中只注册一个「IM机器人」设置页，其中包含九个 IM 渠道和一个 AI Office Connector；
-- 九个渠道及 Office Connector 的 Host、客户端与运行时源码都在本仓库维护，不依赖外部独立插件；
+- Harness 中只注册一个「连接中心」设置页，按「消息通道」和「服务连接」分组展示九个 IM 渠道、飞书个人账号与 AI Office Connector；
+- 九个渠道、飞书个人连接及 Office Connector 的 Host、客户端与运行时源码都在本仓库维护，不依赖外部独立插件；
 - 设置页跟随 DeepSeek Harness 的语言选择，在中文和 English 之间即时切换；机器人发出的聊天消息跟随 Host 的 `language` 配置（默认中文；设为 `en` 即为英文），中文始终为兜底，未收录的文案原样输出；
-- 左侧使用 Logo 切换微信、飞书、钉钉、企业微信、QQ、Slack、Telegram、Discord、WhatsApp 和 AI Office，不使用启用/停用开关；
-- 九个 IM 渠道保持独立的 RPC、凭据、连接监督和会话映射；Office Connector 另行维护设备凭据、Job 租约、审批等待与并发上限；
+- 左侧使用原 dsh-im 的 Logo 与卡片布局切换微信、飞书机器人、钉钉、企业微信、QQ、Slack、Telegram、Discord、WhatsApp、飞书个人账号和 AI Office；
+- 九个 IM 渠道保持独立的 RPC、凭据、连接监督和会话映射；飞书个人连接保留 `dsh-feishu` profile 并提供文档、消息和多维表格工具；Office Connector 另行维护设备凭据、Job 租约、审批等待与并发上限；
 - 浏览器只获得二维码、Manifest、脱敏状态，以及用户为当前 Telegram 或 WhatsApp 机器人主动保存的访问模式和白名单标识；手动输入的 Secret 或 Token 仅单向提交给本机 Host，任何 RPC 响应都不会返回 App Secret、`bot_token`、钉钉 `client_secret`、企业微信 Secret、QQ `app_secret`、Slack Bot/App Token、Telegram/Discord Bot Token、WhatsApp 关联设备密钥、AI Office Device Token，或从平台消息中观察到的其他原始用户标识。
 
 ## 本地开发
@@ -225,7 +225,7 @@ Slack 桌面端若未注册同名的原生 Slash Command，会拦截直接以 `/
 ```sh
 npm install
 npm run check
-node bin/dsh-im.mjs install --source .
+node bin/dsh-connect.mjs install --source .
 ```
 
 `npm run check` 运行单元测试、构建 Host/Client 产物，并验证发布包不包含凭据或独立渠道设置页注册。
@@ -233,7 +233,7 @@ node bin/dsh-im.mjs install --source .
 IM 管理 RPC 默认仅接受回环浏览器。如果 Web profile 在受信任的局域网内对外提供服务，可在该 profile 的 `cordis.patch.yml` 中显式开放给 Connection 已信任的 Host authority：
 
 ```yaml
-- id: tokens-dsh-im
+- id: tokens-connect
   config:
     rpcAuthority: trusted-host
 ```
@@ -245,7 +245,7 @@ IM 管理 RPC 默认仅接受回环浏览器。如果 Web profile 在受信任�
 机器人发出的聊天消息默认使用中文。要切换为英文，在插件配置中设置 `language: en`（也接受 `en-US`、`english`），或设置环境变量 `DSH_IM_LANGUAGE=en`：
 
 ```yaml
-- id: tokens-dsh-im
+- id: tokens-connect
   config:
     language: en
 ```

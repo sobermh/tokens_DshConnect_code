@@ -1,9 +1,76 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createImHostPlugin, inject, name } from '../plugin-src/host/index.mjs';
+import {
+  applyFeishuPersonalConnector,
+  createImHostPlugin,
+  inject,
+  name,
+} from '../plugin-src/host/index.mjs';
 
-test('Host composes nine IM channels and the AI Office connector inside one plugin context', async () => {
+test('Feishu personal connector runs inside an awaited child plugin fiber', async () => {
+  const events = [];
+  const connector = { name: 'feishu-personal', apply() {} };
+  const config = { profile: 'dsh-feishu' };
+  const fiber = {
+    async await() {
+      events.push('fiber:await');
+    },
+  };
+  const ctx = {
+    plugin(plugin, pluginConfig) {
+      events.push('ctx:plugin');
+      assert.equal(plugin, connector);
+      assert.equal(pluginConfig, config);
+      return fiber;
+    },
+  };
+
+  const result = await applyFeishuPersonalConnector(ctx, config, async () => connector);
+
+  assert.equal(result, fiber);
+  assert.deepEqual(events, ['ctx:plugin', 'fiber:await']);
+});
+
+test('Feishu personal connector keeps direct apply fallback for lightweight hosts', async () => {
+  const calls = [];
+  const ctx = { marker: 'test-host' };
+  const config = { profile: 'dsh-feishu' };
+  const connector = {
+    async apply(applyCtx, applyConfig) {
+      calls.push([applyCtx, applyConfig]);
+      return 'applied';
+    },
+  };
+
+  const result = await applyFeishuPersonalConnector(ctx, config, async () => connector);
+
+  assert.equal(result, 'applied');
+  assert.deepEqual(calls, [[ctx, config]]);
+});
+
+test('Feishu personal connector waits for child cleanup before surfacing startup failure', async () => {
+  const registrations = new Set(['feishu_connect', '/tokens-feishu-connect/feishu/status']);
+  const failure = new Error('connector startup failed');
+  const ctx = {
+    plugin() {
+      return {
+        async await() {
+          registrations.clear();
+          throw failure;
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () => applyFeishuPersonalConnector(ctx, {}, async () => ({ apply() {} })),
+    failure,
+  );
+  assert.equal(registrations.size, 0);
+});
+
+test('Host composes message channels and service connectors inside one plugin context', async () => {
   const calls = [];
   const plugin = createImHostPlugin({
     applyFeishu: async (ctx, config) => calls.push(['feishu', ctx, config]),
@@ -16,6 +83,7 @@ test('Host composes nine IM channels and the AI Office connector inside one plug
     applyDiscord: async (ctx, config) => calls.push(['discord', ctx, config]),
     applyWhatsapp: async (ctx, config) => calls.push(['whatsapp', ctx, config]),
     applyOffice: async (ctx, config) => calls.push(['office', ctx, config]),
+    applyFeishuPersonal: async (ctx, config) => calls.push(['feishuPersonal', ctx, config]),
   });
   const ctx = { marker: 'shared-context' };
   const config = {
@@ -30,14 +98,16 @@ test('Host composes nine IM channels and the AI Office connector inside one plug
     discord: { replyTimeoutMs: 60_000 },
     whatsapp: { replyTimeoutMs: 60_000 },
     office: { heartbeatSeconds: 30 },
+    feishuPersonal: { appName: 'Local assistant' },
   };
 
   await plugin.apply(ctx, config);
 
-  assert.equal(name, 'dsh-im-host');
+  assert.equal(name, 'dsh-connect-host');
   assert.deepEqual(inject, [
     'connection',
     'credentials',
+    'tools',
     'webServer',
     'typertGateway',
   ]);
@@ -52,6 +122,14 @@ test('Host composes nine IM channels and the AI Office connector inside one plug
     ['discord', ctx, { ...config.discord, rpcAuthority: 'trusted-host' }],
     ['whatsapp', ctx, { ...config.whatsapp, rpcAuthority: 'trusted-host' }],
     ['office', ctx, { ...config.office, rpcAuthority: 'trusted-host' }],
+    ['feishuPersonal', ctx, {
+      appIdEnv: 'FEISHU_APP_ID',
+      appSecretEnv: 'FEISHU_APP_SECRET',
+      baseURL: 'https://open.feishu.cn',
+      appName: 'Local assistant',
+      appDesc: 'TokensHarness · 飞书连接',
+      profile: 'dsh-feishu',
+    }],
   ]);
 });
 
@@ -66,6 +144,7 @@ const CHANNELS = [
   ['discord', 'applyDiscord'],
   ['whatsapp', 'applyWhatsapp'],
   ['office', 'applyOffice'],
+  ['feishuPersonal', 'applyFeishuPersonal'],
 ];
 
 function activationFixture(failedChannels) {
@@ -92,7 +171,7 @@ function activationFixture(failedChannels) {
   return { plugin: createImHostPlugin(internals), ctx, calls, events, errors, failures };
 }
 
-test('Host continues activating channels in order when one channel fails', async () => {
+test('Host continues activating connectors in order when one connector fails', async () => {
   for (const [failedChannel] of CHANNELS) {
     const fixture = activationFixture(new Set([failedChannel]));
 
@@ -105,18 +184,19 @@ test('Host continues activating channels in order when one channel fails', async
     ]));
     assert.equal(fixture.errors.length, 1);
     assert.match(fixture.errors[0][0], new RegExp(`activate ${failedChannel}`));
+    assert.match(fixture.errors[0][0], new RegExp(`${failedChannel} unavailable`));
     assert.equal(fixture.errors[0][1], fixture.failures.get(failedChannel));
   }
 });
 
-test('Host reports aggregate failure only after every channel was attempted', async () => {
+test('Host reports aggregate failure only after every connector was attempted', async () => {
   const fixture = activationFixture(new Set(CHANNELS.map(([channel]) => channel)));
 
   await assert.rejects(
     () => fixture.plugin.apply(fixture.ctx, {}),
     (error) => error instanceof AggregateError
       && error.errors.length === CHANNELS.length
-      && /failed to activate every channel/.test(error.message),
+      && /failed to activate every connector/.test(error.message),
   );
   assert.deepEqual(fixture.calls, CHANNELS.map(([channel]) => channel));
   assert.equal(fixture.errors.length, CHANNELS.length);

@@ -1,7 +1,7 @@
 {
-  "name": "@tokens/dsh-im",
-  "version": "2.3.0",
-  "description": "把九种 IM 机器人和公网 AI Office 接入本机 DeepSeek Harness。 Connect nine IM channels and a public AI Office to a local DeepSeek Harness.",
+  "name": "@tokens/dsh-connect",
+  "version": "2.4.2",
+  "description": "统一管理九种 IM 机器人、飞书个人账号和公网 AI Office，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -20,7 +20,9 @@
     "telegram",
     "discord",
     "whatsapp",
-    "ai-office"
+    "ai-office",
+    "personal-oauth",
+    "connection-center"
   ],
   "author": {
     "name": "xmanrui",
@@ -48,7 +50,8 @@
     "access": "public"
   },
   "bin": {
-    "dsh-im": "bin/dsh-im.mjs"
+    "dsh-connect": "bin/dsh-connect.mjs",
+    "dsh-im": "bin/dsh-connect.mjs"
   },
   "main": "./lib/index.js",
   "exports": {

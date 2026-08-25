@@ -41,6 +41,9 @@ import { installWeixinStyles } from './channels/weixin/styles.js';
 import { WHATSAPP_RPC_CHANNEL } from './channels/whatsapp/api.js';
 import { WhatsappSettingsTab } from './channels/whatsapp/index.js';
 import { installWhatsappStyles } from './channels/whatsapp/styles.js';
+import { FEISHU_PERSONAL_RPC_CHANNEL } from './connectors/feishu-personal/api.js';
+import { FeishuPersonalSettings } from './connectors/feishu-personal/index.js';
+import { installFeishuPersonalStyles } from './connectors/feishu-personal/styles.js';
 import { en, h, IM_LOCALE_NAMESPACE, setImTranslator, zh } from './i18n.js';
 import {
   createLoopbackAwareRpcCalls,
@@ -49,21 +52,36 @@ import {
 import { installImStyles } from './styles.js';
 import { WorkspaceDirectoryPickerContext } from './workspace-editor.js';
 
-export const name = 'im-settings';
+export const name = 'connect-settings';
 export const inject = ['slots', 'connection', 'locale', 'workspaces'];
 
-const CHANNELS = Object.freeze([
-  { id: 'weixin', label: '微信' },
-  { id: 'feishu', label: '飞书' },
-  { id: 'dingtalk', label: '钉钉' },
-  { id: 'wecom', label: '企业微信' },
-  { id: 'qq', label: 'QQ' },
-  { id: 'slack', label: 'Slack' },
-  { id: 'telegram', label: 'Telegram' },
-  { id: 'discord', label: 'Discord' },
-  { id: 'whatsapp', label: 'WhatsApp' },
-  { id: 'office', label: 'AI Office', note: '（实验功能）' },
+export const CHANNEL_GROUPS = Object.freeze([
+  Object.freeze({
+    id: 'messages',
+    label: '消息通道',
+    channels: Object.freeze([
+      { id: 'weixin', label: '微信' },
+      { id: 'feishu-bot', label: '飞书机器人' },
+      { id: 'dingtalk', label: '钉钉' },
+      { id: 'wecom', label: '企业微信' },
+      { id: 'qq', label: 'QQ' },
+      { id: 'slack', label: 'Slack' },
+      { id: 'telegram', label: 'Telegram' },
+      { id: 'discord', label: 'Discord' },
+      { id: 'whatsapp', label: 'WhatsApp' },
+    ]),
+  }),
+  Object.freeze({
+    id: 'services',
+    label: '服务连接',
+    channels: Object.freeze([
+      { id: 'feishu-personal', label: '飞书个人账号' },
+      { id: 'office', label: 'AI Office', note: '（实验功能）' },
+    ]),
+  }),
 ]);
+
+const CHANNELS = Object.freeze(CHANNEL_GROUPS.flatMap((group) => group.channels));
 
 function WeixinLogo() {
   return h('span', { className: 'dim-logo dim-logoWeixin', 'aria-hidden': 'true' },
@@ -115,7 +133,7 @@ function OfficeLogo() {
 
 function ChannelLogo({ channel }) {
   if (channel === 'weixin') return h(WeixinLogo);
-  if (channel === 'feishu') return h(FeishuLogo);
+  if (channel === 'feishu-bot' || channel === 'feishu-personal') return h(FeishuLogo);
   if (channel === 'dingtalk') return h(DingtalkLogo);
   if (channel === 'wecom') return h(WecomLogo);
   if (channel === 'qq') return h(QqLogo);
@@ -153,6 +171,7 @@ export function IMSettingsTab({
   weixinRpcCall,
   whatsappRpcCall,
   officeRpcCall,
+  feishuPersonalRpcCall,
   workspaceDirectoryPicker,
   browserLocation = globalThis.location,
   navigateToRecoveryUrl = replacePageLocation,
@@ -175,6 +194,7 @@ export function IMSettingsTab({
     weixinRpcCall,
     whatsappRpcCall,
     officeRpcCall,
+    feishuPersonalRpcCall,
   }, {
     location: browserLocation,
     onRecovery: reportLoopbackRecovery,
@@ -183,6 +203,7 @@ export function IMSettingsTab({
     dingtalkRpcCall,
     discordRpcCall,
     feishuRpcCall,
+    feishuPersonalRpcCall,
     officeRpcCall,
     qqRpcCall,
     reportLoopbackRecovery,
@@ -193,18 +214,18 @@ export function IMSettingsTab({
     whatsappRpcCall,
   ]);
   return h(WorkspaceDirectoryPickerContext.Provider, { value: workspaceDirectoryPicker },
-    h('section', { className: 'dim-page', 'aria-label': 'IM机器人设置' },
+    h('section', { className: 'dim-page', 'aria-label': '连接中心设置' },
     h('header', { className: 'dim-title' },
       h('div', { className: 'dim-brand' },
-        h('strong', { className: 'dim-brandName' }, 'DSH-IM'),
-        h('p', null, '让 DeepSeek Harness 触手可及')),
+        h('strong', { className: 'dim-brandName' }, '连接中心'),
+        h('p', null, '统一管理消息通道与服务连接')),
       h('span', { className: 'dim-githubAction' },
         h('a', {
           className: 'dim-githubLink',
           href: 'https://github.com/sobermh/tokens_DshIm_code',
           target: '_blank',
           rel: 'noopener noreferrer',
-          'aria-label': 'dsh-im GitHub',
+          'aria-label': '连接中心 GitHub',
           'aria-describedby': githubTooltipId,
         },
         h('span', null, 'GitHub'),
@@ -216,8 +237,14 @@ export function IMSettingsTab({
         }, '帮助与反馈 · 前往 GitHub')),
     ),
     h('div', { className: 'dim-layout' },
-      h('nav', { className: 'dim-rail', role: 'tablist', 'aria-label': 'IM 渠道' },
-        CHANNELS.map((channel) => h('button', {
+      h('nav', { className: 'dim-rail', role: 'tablist', 'aria-label': '连接通道' },
+        CHANNEL_GROUPS.map((group) => h('div', {
+          key: group.id,
+          className: 'dim-channelGroup',
+          role: 'presentation',
+        },
+        h('div', { className: 'dim-channelGroupLabel' }, group.label),
+        group.channels.map((channel) => h('button', {
           key: channel.id,
           type: 'button',
           role: 'tab',
@@ -231,7 +258,7 @@ export function IMSettingsTab({
         h('span', { className: 'dim-channelCopy' },
           h('strong', null, channel.label),
           channel.note ? h('small', { className: 'dim-channelNote' }, channel.note) : null,
-        )))),
+        )))))),
       h('div', { className: 'dim-divider', 'aria-hidden': 'true' }),
       h('main', {
         className: 'dim-panel',
@@ -247,7 +274,7 @@ export function IMSettingsTab({
         : null,
       active.id === 'weixin'
         ? h(WeixinSettingsTab, { rpcCall: rpcCalls.weixinRpcCall })
-        : active.id === 'feishu'
+        : active.id === 'feishu-bot'
           ? h(FeishuSettingsTab, { rpcCall: rpcCalls.feishuRpcCall })
           : active.id === 'dingtalk'
             ? h(DingtalkSettingsTab, { rpcCall: rpcCalls.dingtalkRpcCall })
@@ -263,7 +290,9 @@ export function IMSettingsTab({
                     ? h(DiscordSettingsTab, { rpcCall: rpcCalls.discordRpcCall })
                     : active.id === 'whatsapp'
                       ? h(WhatsappSettingsTab, { rpcCall: rpcCalls.whatsappRpcCall })
-                      : h(OfficeSettingsTab, { rpcCall: rpcCalls.officeRpcCall })),
+                      : active.id === 'feishu-personal'
+                        ? h(FeishuPersonalSettings, { rpcCall: rpcCalls.feishuPersonalRpcCall })
+                        : h(OfficeSettingsTab, { rpcCall: rpcCalls.officeRpcCall })),
     ),
   ));
 }
@@ -287,6 +316,7 @@ export function apply(ctx) {
       installDiscordStyles(),
       installWhatsappStyles(),
       installOfficeStyles(),
+      installFeishuPersonalStyles(),
       installImStyles(),
     ];
     return () => {
@@ -314,6 +344,8 @@ export function apply(ctx) {
     ctx.connection.rpc.call(SLACK_RPC_CHANNEL, endpoint, payload, signal);
   const officeRpcCall = (endpoint, payload, signal) =>
     ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
+  const feishuPersonalRpcCall = (endpoint, payload, signal) =>
+    ctx.connection.rpc.call(FEISHU_PERSONAL_RPC_CHANNEL, endpoint, payload, signal);
   const workspaceDirectoryPicker = Object.freeze({
     listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
     pickDirectory: () => ctx.workspaces.pickDirectory(),
@@ -321,9 +353,9 @@ export function apply(ctx) {
 
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab',
-    id: 'im',
+    id: 'connect',
     order: 20,
-    label: () => t('IM机器人'),
+    label: () => t('连接中心'),
     locale: IM_LOCALE_NAMESPACE,
     inject: () => ({
       dingtalkRpcCall,
@@ -336,6 +368,7 @@ export function apply(ctx) {
       weixinRpcCall,
       whatsappRpcCall,
       officeRpcCall,
+      feishuPersonalRpcCall,
       workspaceDirectoryPicker,
     }),
   }, IMSettingsTab));

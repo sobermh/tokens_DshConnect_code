@@ -1,4 +1,4 @@
-export const OFFICE_STYLE_ID = 'tokens-dsh-im-office-settings';
+export const OFFICE_STYLE_ID = 'tokens-dsh-connect-office-settings';
 
 const CSS = `
 .dof-page { --dof-accent: var(--dsw-alias-brand-primary, #3964fe); }
@@ -43,7 +43,7 @@ export function installOfficeStyles() {
   if (typeof document === 'undefined') return () => {};
   if (document.querySelector(`style[data-plugin-css="${OFFICE_STYLE_ID}"]`)) return () => {};
   const style = document.createElement('style');
-  style.dataset.plugin = '@tokens/dsh-im';
+  style.dataset.plugin = '@tokens/dsh-connect';
   style.dataset.pluginCss = OFFICE_STYLE_ID;
   style.textContent = CSS;
   document.head.append(style);

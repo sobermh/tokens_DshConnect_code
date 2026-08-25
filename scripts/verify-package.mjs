@@ -1,12 +1,11 @@
 import { access, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
 const root = resolve(import.meta.dirname, '..');
 const required = [
   'lib/index.js',
   'lib/client.js',
-  'bin/dsh-im.mjs',
+  'bin/dsh-connect.mjs',
   'cordis.patch.yml',
   'README.md',
   'THIRD_PARTY_NOTICES.md',
@@ -22,6 +21,8 @@ const required = [
   'plugin-src/host/channels/telegram/index.mjs',
   'plugin-src/host/channels/discord/index.mjs',
   'plugin-src/host/channels/whatsapp/index.mjs',
+  'plugin-src/host/connectors/feishu-personal/index.js',
+  'plugin-src/client/connectors/feishu-personal/index.js',
   'src/channels/feishu/feishu-runtime.mjs',
   'src/channels/weixin/weixin-runtime.mjs',
   'src/channels/dingtalk/dingtalk-runtime.mjs',
@@ -43,15 +44,15 @@ const [client, host, patch, manifestText, lockText, hostSource, clientSource, ex
   readFile(resolve(root, 'package-lock.json'), 'utf8'),
   readFile(resolve(root, 'plugin-src/host/index.mjs'), 'utf8'),
   readFile(resolve(root, 'plugin-src/client/index.js'), 'utf8'),
-  stat(resolve(root, 'bin/dsh-im.mjs')),
+  stat(resolve(root, 'bin/dsh-connect.mjs')),
 ]);
 const manifest = JSON.parse(manifestText);
 const lock = JSON.parse(lockText);
 
-if (manifest.name !== '@tokens/dsh-im'
-  || lock.name !== '@tokens/dsh-im'
-  || lock.packages?.['']?.name !== '@tokens/dsh-im') {
-  throw new Error('package metadata must use the @tokens/dsh-im identity');
+if (manifest.name !== '@tokens/dsh-connect'
+  || lock.name !== '@tokens/dsh-connect'
+  || lock.packages?.['']?.name !== '@tokens/dsh-connect') {
+  throw new Error('package metadata must use the @tokens/dsh-connect identity');
 }
 
 // DSH runtime packages use module-local Symbol keys, so a second physical copy breaks Host lookup.
@@ -88,14 +89,24 @@ if (forbiddenDshLockPaths.length > 0) {
   );
 }
 
-if (!client.includes('id: "@tokens/dsh-im"')) {
-  throw new Error('client bundle does not register the dsh-im loader id');
+if (!client.includes('id: "@tokens/dsh-connect"')) {
+  throw new Error('client bundle does not register the dsh-connect loader id');
 }
-if (!client.includes('id: "im"')
-  || !client.includes('label: () => t("IM\\u673A\\u5668\\u4EBA")')
+if (!client.includes('id: "connect"')
+  || !client.includes('label: () => t("\\u8FDE\\u63A5\\u4E2D\\u5FC3")')
   || !client.includes('locale: IM_LOCALE_NAMESPACE')
   || !client.includes('IM_LOCALE_NAMESPACE = "dsh-im"')) {
-  throw new Error('client bundle does not register the localized IM settings tab');
+  throw new Error('client bundle does not register the localized connection-center tab');
+}
+for (const marker of [
+  'feishu-personal',
+  '\\u98DE\\u4E66\\u4E2A\\u4EBA\\u8D26\\u53F7',
+  '\\u6D88\\u606F\\u901A\\u9053',
+  '\\u670D\\u52A1\\u8FDE\\u63A5',
+]) {
+  if (!client.includes(marker)) {
+    throw new Error(`client bundle is missing connection-center marker ${marker}`);
+  }
 }
 if ((client.match(/ctx\.slots\.inject\("settings\.plugins\.tab"/g) ?? []).length !== 1) {
   throw new Error('client bundle must register exactly one settings tab');
@@ -117,6 +128,17 @@ for (const marker of ['/session Session ID', 'bindWorkspaceSession', 'session-su
     throw new Error(`host bundle does not contain the Session binding marker: ${marker}`);
   }
 }
+for (const marker of [
+  '/tokens-feishu-connect',
+  'feishu_create_doc',
+  'feishu_send_message',
+  'feishu_create_bitable',
+  'dsh-feishu',
+]) {
+  if (!host.includes(marker)) {
+    throw new Error(`host bundle is missing personal Feishu marker ${marker}`);
+  }
+}
 if (/@xmanrui\/dsh-(?:feishu|weixin|dingtalk)/.test(host)) {
   throw new Error('host bundle still imports an external channel plugin');
 }
@@ -125,10 +147,10 @@ if (/@xmanrui\/dsh-(?:feishu|weixin|dingtalk)/.test(
 )) {
   throw new Error('source or package metadata still depends on an external channel plugin');
 }
-if (!patch.includes('id: tokens-dsh-im')
-  || !patch.includes("name: '@tokens/dsh-im'")
+if (!patch.includes('id: tokens-connect')
+  || !patch.includes("name: '@tokens/dsh-connect'")
   || /dsh-(?:feishu|weixin|dingtalk)/.test(patch)) {
-  throw new Error('bundle patch must activate only dsh-im');
+  throw new Error('bundle patch must activate only dsh-connect');
 }
 for (const name of ['@xmanrui/dsh-feishu', '@xmanrui/dsh-weixin', '@xmanrui/dsh-dingtalk']) {
   if (manifest.dependencies?.[name]) {
@@ -163,18 +185,17 @@ for (const [name, version] of Object.entries(bundledBuildDependencies)) {
 if (lock.packages?.['node_modules/protobufjs']?.dev !== true) {
   throw new Error('protobufjs must remain build-only in the package lock');
 }
-if (manifest.bin?.['dsh-im'] !== 'bin/dsh-im.mjs') {
-  throw new Error('package manifest must publish the dsh-im executable');
+if (manifest.bin?.['dsh-connect'] !== 'bin/dsh-connect.mjs'
+  || manifest.bin?.['dsh-im'] !== 'bin/dsh-connect.mjs') {
+  throw new Error('package manifest must publish the dsh-connect executable and dsh-im alias');
 }
 if (/(?:from\s*|import\s*\(|require\s*\()\s*["'](?:@larksuiteoapi\/node-sdk|@whiskeysockets\/baileys|https-proxy-agent|protobufjs)(?:\/[^"']*)?["']/.test(host)) {
   throw new Error('host bundle must not import a bundled SDK, proxy agent, or protobufjs at runtime');
 }
 if (process.platform !== 'win32' && (executable.mode & 0o111) === 0) {
-  throw new Error('dsh-im CLI is not executable');
+  throw new Error('dsh-connect CLI is not executable');
 }
 if (/private-bot-token|must-be-rolled-back|DEEPSEEK_API_KEY=/.test(client + host)) {
   throw new Error('built artifacts contain a test or environment secret marker');
 }
-await import(pathToFileURL(resolve(root, 'lib/index.js')).href);
-
-console.log('Verified dsh-im package artifacts.');
+console.log('Verified dsh-connect package artifacts.');

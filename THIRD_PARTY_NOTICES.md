@@ -1,5 +1,10 @@
 # Third-party notices
 
+The personal Feishu connection flow, Lark CLI provisioning, identity metadata,
+and Feishu document/message tools are adapted from
+[`@tokens/dsh-feishu-connect`](https://github.com/sobermh/tokens_DshFeishuConnect_code)
+at commit `d764386f768b65cac5efa9a2b2a8b6b69599d202`, licensed under the MIT License.
+
 The Weixin iLink request format, QR-login states, and message fields are adapted from Tencent's [`openclaw-weixin`](https://github.com/Tencent/openclaw-weixin) project at commit `cef0bfc390393f716903e16d50408118047f87e0` (package version 2.4.6), licensed under the MIT License and copyright Tencent.
 
 The DingTalk device-authorization request sequence and AI Card streaming protocol are adapted from DingTalk Real Team's [`dingtalk-openclaw-connector`](https://github.com/DingTalk-Real-AI/dingtalk-openclaw-connector) project at commit `b2fd6e5ea2ff99bd213faac637d3da541b2bfaf4`, licensed under the MIT License and copyright 2026 DingTalk Real Team.

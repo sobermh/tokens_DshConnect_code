@@ -30,15 +30,15 @@
 
 ---
 
-> This repository is the Tokens-maintained fork of [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im), published as `@tokens/dsh-im`. The original authorship, contribution history, and MIT license are preserved; this fork supports independent TokensHarness builds, releases, and future development.
+> This repository evolves from [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) and is published as `@tokens/dsh-connect`. The original authorship, contribution history, and MIT license are preserved. The current package combines IM, a personal Feishu account, and AI Office in one TokensHarness Connection Center.
 
 ## Introduction
 
-Connect IM bots to DeepSeek Harness by scanning a QR code, using an App Manifest, or entering existing bot credentials, and let the local Harness connect outward to a public AI Office. One plugin and one settings entry manage nine multi-bot IM channels and the AI Office Connector.
+Connect IM bots to DeepSeek Harness by scanning a QR code, using an App Manifest, or entering existing bot credentials; connect a personal Feishu account through OAuth; and let the local Harness connect outward to a public AI Office. One plugin and one Connection Center entry manage nine multi-bot IM channels, the personal Feishu connection, and the AI Office Connector.
 
 ## Interface
 
-![IM bot settings page](docs/images/imbot.png)
+![Connection Center settings page](docs/images/imbot.png)
 
 ## Built-in channels
 
@@ -91,10 +91,10 @@ A successful heartbeat response must be JSON: `{"ok":true,"protocolVersion":"off
 Install the published stable release from npm (recommended):
 
 ```sh
-dsh plugin --profile web add -w @tokens/dsh-im
+dsh plugin --profile web add -w @tokens/dsh-connect@2.4.2
 ```
 
-Restart `dsh web`, then open **Settings → Plugins → IM Bot**.
+Restart `dsh web`, then open **Settings → Plugins → Connection Center**. For a local desktop test, use the `desktop` profile and replace the package spec with the absolute path to the local `.tgz` when needed.
 
 To try the latest code before it is published to npm, use the GitHub-source installer instead:
 
@@ -104,7 +104,7 @@ npx -y github:sobermh/tokens_DshIm_code install
 
 A GitHub-source installation fetches and builds a Git dependency directly. With pnpm 10 or newer, the profile may first need an `allowBuilds` entry in `pnpm-workspace.yaml`. Most users should prefer the stable npm release.
 
-After installation, follow the built-in instructions on each channel page to scan a QR code or enter credentials. Secrets and Tokens are sent only to the local Harness Host and stored through its protected credential provider; status responses and bot lists never return them.
+After installation, follow the built-in instructions on each channel page to scan a QR code, enter credentials, or authorize the personal Feishu account. Secrets and Tokens are sent only to the local Harness Host and stored through its protected credential provider; status responses and bot lists never return them. The upgrade installer removes the legacy `@tokens/dsh-im`, `@tokens/dsh-feishu-connect`, and `@tokens/dsh-connect-ui` packages while preserving bot bindings and the existing `dsh-feishu` authorization data.
 
 If this machine must use a forward proxy to reach Feishu, set `HTTPS_PROXY` to a full HTTP proxy URL before starting `dsh web` (for example, `http://proxy:8080`; lowercase `https_proxy` is also supported, with `HTTP_PROXY` accepted as a fallback), then restart the Host after changing it. Feishu registration and credential verification reuse the SDK's proxy-aware HTTP client, while the message WebSocket explicitly uses that proxy; the WebSocket path does not currently read `ALL_PROXY` or `NO_PROXY`.
 
@@ -210,11 +210,11 @@ If the Slack desktop app has no native Slash Command registered with the same na
 
 ## Design
 
-- Registers one **IM Bot** settings page containing nine IM channels and one AI Office Connector.
-- Maintains the Host, client, and runtime sources for all nine channels and the Office Connector in this repository without external standalone plugins.
+- Registers one **Connection Center** settings page, grouping nine IM channels under Messaging and the personal Feishu account plus AI Office under Service Connections.
+- Maintains the Host, client, and runtime sources for all nine channels, the personal Feishu connection, and the Office Connector in this repository without external standalone plugins.
 - Follows the DeepSeek Harness language preference and switches the settings UI live between Chinese and English. Bot chat messages follow the Host's `language` config (Chinese by default; `en` switches them to English), with Chinese always as the fallback so untranslated text is sent verbatim.
-- Uses logos for WeChat, Feishu, DingTalk, WeCom, QQ, Slack, Telegram, Discord, WhatsApp, and AI Office navigation without enable/disable switches.
-- Keeps RPC endpoints, credentials, connection supervision, and session mappings isolated by IM channel; the Office Connector separately owns Device credentials, Job leases, approval waits, and concurrency limits.
+- Reuses the original dsh-im logos and card layout for WeChat, Feishu Bot, DingTalk, WeCom, QQ, Slack, Telegram, Discord, WhatsApp, Personal Feishu, and AI Office.
+- Keeps RPC endpoints, credentials, connection supervision, and session mappings isolated by IM channel. Personal Feishu retains the `dsh-feishu` profile and exposes document, messaging, and Bitable tools; the Office Connector separately owns Device credentials, Job leases, approval waits, and concurrency limits.
 - Returns only QR codes, the public Slack Manifest, redacted status data, and access modes or allowlist identifiers explicitly saved for the current Telegram or WhatsApp bot. Manually entered secrets and Tokens travel one way to the local Host; no RPC response returns App Secrets, `bot_token`, DingTalk `client_secret`, WeCom Secrets, QQ `app_secret`, Slack Bot/App Tokens, Telegram/Discord Bot Tokens, WhatsApp linked-device keys, AI Office Device Tokens, or other raw user identifiers observed from platform messages.
 
 ## Local development
@@ -222,7 +222,7 @@ If the Slack desktop app has no native Slash Command registered with the same na
 ```sh
 npm install
 npm run check
-node bin/dsh-im.mjs install --source .
+node bin/dsh-connect.mjs install --source .
 ```
 
 `npm run check` runs unit tests, builds the Host and Client artifacts, and verifies that the published package contains neither credentials nor standalone channel settings-page registrations.
@@ -230,7 +230,7 @@ node bin/dsh-im.mjs install --source .
 IM management RPCs accept loopback browsers by default. When a Web profile is deliberately served on a trusted LAN, opt the plugin into the Host authorities already trusted by Connection in that profile's `cordis.patch.yml`:
 
 ```yaml
-- id: tokens-dsh-im
+- id: tokens-connect
   config:
     rpcAuthority: trusted-host
 ```
@@ -242,7 +242,7 @@ IM management RPCs accept loopback browsers by default. When a Web profile is de
 Bot chat messages are in Chinese by default. To switch them to English, set `language: en` in the plugin config (also accepts `en-US` or `english`), or set the `DSH_IM_LANGUAGE=en` environment variable:
 
 ```yaml
-- id: tokens-dsh-im
+- id: tokens-connect
   config:
     language: en
 ```

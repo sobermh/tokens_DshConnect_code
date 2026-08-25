@@ -11,10 +11,11 @@ import { apply as applyWhatsapp } from './channels/whatsapp/index.mjs';
 import { installOutboundArtifactTool } from '../../src/channels/shared/semantic/artifact.mjs';
 import { setImHostLanguage } from '../../src/channels/shared/i18n.mjs';
 
-export const name = 'dsh-im-host';
+export const name = 'dsh-connect-host';
 export const inject = [
   'connection',
   'credentials',
+  'tools',
   'webServer',
   'typertGateway',
 ];
@@ -24,6 +25,42 @@ function channelConfig(config, name) {
   return config.rpcAuthority === undefined
     ? channel
     : { ...channel, rpcAuthority: config.rpcAuthority };
+}
+
+function feishuPersonalConfig(config) {
+  return {
+    appIdEnv: 'FEISHU_APP_ID',
+    appSecretEnv: 'FEISHU_APP_SECRET',
+    baseURL: 'https://open.feishu.cn',
+    appName: 'Tokens 工作助手',
+    appDesc: 'TokensHarness · 飞书连接',
+    profile: 'dsh-feishu',
+    ...(config.feishuPersonal ?? {}),
+  };
+}
+
+async function loadFeishuPersonalConnector() {
+  return import('./connectors/feishu-personal/index.js');
+}
+
+export async function applyFeishuPersonalConnector(
+  ctx,
+  config,
+  loadConnector = loadFeishuPersonalConnector,
+) {
+  const connector = await loadConnector();
+  if (typeof ctx?.plugin !== 'function') {
+    return connector.apply(ctx, config);
+  }
+
+  const fiber = ctx.plugin(connector, config);
+  await fiber.await();
+  return fiber;
+}
+
+function activationErrorText(error) {
+  if (error instanceof Error) return error.stack ?? error.message;
+  return String(error);
 }
 
 export function createImHostPlugin(internals = {}) {
@@ -37,6 +74,7 @@ export function createImHostPlugin(internals = {}) {
   const startDiscord = internals.applyDiscord ?? applyDiscord;
   const startOffice = internals.applyOffice ?? applyOffice;
   const startWhatsapp = internals.applyWhatsapp ?? applyWhatsapp;
+  const startFeishuPersonal = internals.applyFeishuPersonal ?? applyFeishuPersonalConnector;
   const channels = [
     ['feishu', startFeishu],
     ['weixin', startWeixin],
@@ -48,6 +86,7 @@ export function createImHostPlugin(internals = {}) {
     ['discord', startDiscord],
     ['whatsapp', startWhatsapp],
     ['office', startOffice],
+    ['feishuPersonal', startFeishuPersonal],
   ];
   return Object.freeze({
     name,
@@ -67,14 +106,19 @@ export function createImHostPlugin(internals = {}) {
       const failures = [];
       for (const [channel, start] of channels) {
         try {
-          await start(ctx, channelConfig(config, channel));
+          await start(ctx, channel === 'feishuPersonal'
+            ? feishuPersonalConfig(config)
+            : channelConfig(config, channel));
         } catch (error) {
           failures.push(error);
-          logger.error?.(`[dsh-im] failed to activate ${channel}; continuing with the remaining channels`, error);
+          logger.error?.(
+            `[dsh-connect] failed to activate ${channel}; continuing with the remaining connectors: ${activationErrorText(error)}`,
+            error,
+          );
         }
       }
       if (failures.length === channels.length) {
-        throw new AggregateError(failures, 'dsh-im failed to activate every channel');
+        throw new AggregateError(failures, 'dsh-connect failed to activate every connector');
       }
     },
   });

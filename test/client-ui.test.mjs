@@ -97,7 +97,7 @@ const QQ_SOURCE_URL = new URL(
   import.meta.url,
 );
 
-test('IM settings renders nine IM channels plus the AI Office connector', async () => {
+test('connection center groups nine IM channels with personal Feishu and AI Office', async () => {
   const styles = await readFile(STYLES_URL, 'utf8');
   const markup = renderToStaticMarkup(React.createElement(IMSettingsTab, {
     feishuRpcCall: async () => ({ ok: true, value: {} }),
@@ -110,30 +110,34 @@ test('IM settings renders nine IM channels plus the AI Office connector', async 
     discordRpcCall: async () => ({ ok: true, value: {} }),
     whatsappRpcCall: async () => ({ ok: true, value: {} }),
     officeRpcCall: async () => ({ ok: true, value: {} }),
+    feishuPersonalRpcCall: async () => ({ ok: true, value: {} }),
   }));
 
-  assert.match(markup, /IM机器人/);
-  assert.match(markup, /让 DeepSeek Harness 触手可及/);
+  assert.match(markup, /连接中心/);
+  assert.match(markup, /统一管理消息通道与服务连接/);
   assert.match(markup, /class="dim-brand"/);
-  assert.match(markup, /<strong class="dim-brandName">DSH-IM<\/strong>/);
+  assert.match(markup, /<strong class="dim-brandName">连接中心<\/strong>/);
   assert.doesNotMatch(markup, /dim-brandLogo|<img/);
   assert.match(markup, /href="https:\/\/github\.com\/sobermh\/tokens_DshIm_code"/);
   assert.match(markup, /target="_blank"/);
   assert.match(markup, /rel="noopener noreferrer"/);
-  assert.match(markup, /aria-label="dsh-im GitHub"/);
+  assert.match(markup, /aria-label="连接中心 GitHub"/);
   assert.match(markup, /aria-describedby="[^"]+"/);
   assert.match(markup, /role="tooltip"[^>]*>帮助与反馈 · 前往 GitHub</);
   assert.match(styles, /\.dim-title \{[^}]*margin: 0 0 18px;/);
   assert.match(styles, /\.dim-title p \{[^}]*color: var\(--dsw-alias-label-secondary, #646a73\);[^}]*font-size: 12px;[^}]*font-weight: 500;/);
   assert.match(styles, /\.dim-brand \{[^}]*display: flex;[^}]*flex-direction: column;[^}]*align-items: flex-start;[^}]*gap: 1px;/);
-  assert.match(styles, /\.dim-brandName \{[^}]*font-size: 20px;[^}]*font-weight: 800;[^}]*letter-spacing: \.04em;/);
+  assert.match(styles, /\.dim-brandName \{[^}]*font-size: 20px;[^}]*font-weight: 760;[^}]*letter-spacing: 0;/);
   assert.doesNotMatch(styles, /\.dim-brandLogo/);
   assert.match(styles, /\.dim-githubLink \{[^}]*border: 1px solid var\(--dsw-alias-border-l2, #dfe1e5\);[^}]*text-decoration: none;/);
   assert.match(styles, /\.dim-githubTooltip \{[^}]*bottom: calc\(100% \+ 8px\);[^}]*transform: translateY\(3px\);/);
   assert.match(styles, /\.dim-githubAction:hover \.dim-githubTooltip, \.dim-githubAction:focus-within \.dim-githubTooltip \{[^}]*opacity: 1;[^}]*visibility: visible;/);
   assert.doesNotMatch(markup, /\d+ 个渠道|dim-channelCount/);
+  assert.match(markup, /class="dim-channelGroupLabel">消息通道</);
+  assert.match(markup, /class="dim-channelGroupLabel">服务连接</);
   assert.match(markup, />微信</);
-  assert.match(markup, />飞书</);
+  assert.match(markup, />飞书机器人</);
+  assert.match(markup, />飞书个人账号</);
   assert.match(markup, />钉钉</);
   assert.match(markup, />企业微信</);
   assert.match(markup, />QQ</);
@@ -153,7 +157,7 @@ test('IM settings renders nine IM channels plus the AI Office connector', async 
   assert.match(markup, /dim-logoWhatsapp/);
   assert.match(markup, /dim-logoOffice/);
   assert.match(styles, /\.dim-logoFeishu svg \{ width: 28px; height: 28px; \}/);
-  assert.equal((markup.match(/role="tab"/g) ?? []).length, 10);
+  assert.equal((markup.match(/role="tab"/g) ?? []).length, 11);
   assert.equal((markup.match(/aria-selected="true"/g) ?? []).length, 1);
   assert.doesNotMatch(markup, /role="switch"|type="checkbox"/);
   assert.doesNotMatch(markup, /dim-chevron|扫码绑定<\/small>|扫码接入<\/small>/);
@@ -651,7 +655,7 @@ test('every shipped Chinese client string has an English projection', async () =
   }
 });
 
-test('client registers a live bilingual locale seat and directory picker for the IM settings tab', async () => {
+test('client registers a live bilingual locale seat and directory picker for the connection center', async () => {
   const effects = [];
   const registrations = [];
   const dictionaries = [];
@@ -705,7 +709,7 @@ test('client registers a live bilingual locale seat and directory picker for the
     assert.deepEqual(Object.keys(dictionaries[0].value.en).sort(), Object.keys(dictionaries[0].value.zh).sort());
     assert.equal(registrations.length, 1);
     assert.equal(registrations[0].options.locale, IM_LOCALE_NAMESPACE);
-    assert.equal(registrations[0].options.label(), 'IM bots');
+    assert.equal(registrations[0].options.label(), 'Connection center');
 
     const injected = registrations[0].options.inject();
     const signal = new AbortController().signal;
@@ -723,9 +727,10 @@ test('client registers a live bilingual locale seat and directory picker for the
       registrations[0].component,
       injected,
     ));
-    assert.match(markup, /DeepSeek Harness, always within reach/);
+    assert.match(markup, /Manage message channels and service connections in one place/);
     assert.match(markup, /Help &amp; feedback · Open GitHub/);
-    assert.match(markup, />WeChat<|>Feishu<|>DingTalk<|>WeCom</);
+    assert.match(markup, />WeChat<|>Feishu bot<|>DingTalk<|>WeCom</);
+    assert.match(markup, />Personal Feishu account</);
     assert.match(markup, />QQ<[^]*>Slack<[^]*>Telegram<[^]*>Discord<[^]*>WhatsApp</);
     assert.match(markup, />AI Office<\/strong><small class="dim-channelNote">\(Experimental\)<\/small>/);
     assert.doesNotMatch(markup, /[\p{Script=Han}]/u);
