@@ -18,6 +18,7 @@ import {
 
 export { FEISHU_ENDPOINTS, FEISHU_RPC_CHANNEL };
 export const FEISHU_MULTI_ENDPOINTS = Object.freeze({
+  bindApplication: 'bot.bind-application',
   reconnectBot: 'bot.reconnect',
   disconnectBot: 'bot.disconnect',
   deleteBot: 'bot.delete',
@@ -286,6 +287,27 @@ function publicBotEntry(entry) {
   return result;
 }
 
+function publicApplication(entry) {
+  const source = entry && typeof entry === 'object' ? entry : {};
+  if (!safeOpaqueId(source.applicationId)) return null;
+  const botIds = Array.isArray(source.botIds)
+    ? [...new Set(source.botIds.filter(safeOpaqueId))]
+    : [];
+  return {
+    applicationId: source.applicationId,
+    name: typeof source.name === 'string' && source.name.trim()
+      ? source.name.trim().slice(0, 256)
+      : '飞书自建应用',
+    appIdMasked: typeof source.appIdMasked === 'string'
+      ? source.appIdMasked.slice(0, 64)
+      : 'cli_••••',
+    domain: source.domain === 'lark' ? 'lark' : 'feishu',
+    botIds,
+    botCount: botIds.length,
+    usedByPersonal: source.usedByPersonal === true,
+  };
+}
+
 /** Exact redacted browser contract consumed by the Feishu settings client. */
 export async function toPublicFeishuStatus(status, { encodeQr = qrCodeDataUrl } = {}) {
   const source = status && typeof status === 'object' ? status : {};
@@ -309,6 +331,9 @@ export async function toPublicFeishuStatus(status, { encodeQr = qrCodeDataUrl } 
   const bots = Array.isArray(source.bots)
     ? source.bots.map(publicBotEntry).filter(Boolean)
     : [];
+  const applications = Array.isArray(source.applications)
+    ? source.applications.map(publicApplication).filter(Boolean)
+    : [];
   const snapshot = {
     schemaVersion: source.schemaVersion === 2 ? 2 : 1,
     revision: Number.isSafeInteger(source.revision) && source.revision >= 0 ? source.revision : 0,
@@ -318,6 +343,7 @@ export async function toPublicFeishuStatus(status, { encodeQr = qrCodeDataUrl } 
     bot: publicBot(source.bot),
     health: publicHealth(source, connected),
     bots,
+    applications,
     agentPresetCatalog: normalizeAgentPresetCatalog(source.agentPresetCatalog),
     totals: {
       configured: bots.length || (source.configured === true ? 1 : 0),
@@ -374,6 +400,12 @@ function validPayload(endpoint, payload) {
       && validCredential(payload.appSecret, 1024)
       ? null
       : 'Credential binding requires App ID and App Secret.';
+  }
+  if (endpoint === FEISHU_MULTI_ENDPOINTS.bindApplication) {
+    return hasOnlyKeys(payload, new Set(['applicationId']))
+      && safeOpaqueId(payload.applicationId)
+      ? null
+      : 'Binding an existing application requires a valid applicationId.';
   }
   if (endpoint === FEISHU_ENDPOINTS.pollProvisioning
     || endpoint === FEISHU_ENDPOINTS.cancelProvisioning) {
@@ -615,6 +647,14 @@ export function createFeishuRpcHandler(controller, { encodeQr = qrCodeDataUrl } 
         }
         value = await toPublicFeishuStatus(
           await controller.bindCredentials(payload),
+          { encodeQr: cachedEncodeQr },
+        );
+      } else if (endpoint === FEISHU_MULTI_ENDPOINTS.bindApplication) {
+        if (typeof controller.bindSharedApplication !== 'function') {
+          throw new Error('Shared application binding is unavailable');
+        }
+        value = await toPublicFeishuStatus(
+          await controller.bindSharedApplication(payload.applicationId),
           { encodeQr: cachedEncodeQr },
         );
       } else if (endpoint === FEISHU_ENDPOINTS.testConnection) {

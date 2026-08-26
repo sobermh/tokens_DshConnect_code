@@ -6,14 +6,32 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.4.3] - 2026-08-26
+
+### Added / 新增
+
+- 新增统一「连接中心」，在一个插件内分别管理九种 IM 机器人与一个飞书个人账号授权；飞书机器人和个人 OAuth 可复用同一个应用，也可使用独立应用。
+  Added a unified Connection Center that separately manages nine IM bot channels and one personal Feishu authorization; Feishu bots and personal OAuth can share one application or use independent applications.
+- 新增飞书应用注册表与真实能力检测，统一保护 App Secret，并从 `lark-cli auth status --verify` 和本地官方 Skills 清单展示实际身份、个人权限与可用能力。
+  Added a Feishu application registry and verified capability inspection, protecting each App Secret once and reporting real identities, user scopes, and available capabilities from `lark-cli auth status --verify` and the installed official Skills manifest.
+
 ### Changed / 变更
 
+- 飞书一键创建应用现在默认包含审批实例评论等机器人权限，并预配置消息事件与卡片回调；应用权限与个人 OAuth 权限保持独立。
+  Feishu one-click application creation now includes bot permissions such as approval instance comments and preconfigures message events and card callbacks; application permissions remain independent from personal OAuth scopes.
+- 移除实验性的 AI Office Connector，连接中心聚焦 IM 机器人和飞书应用授权。
+  Removed the experimental AI Office Connector so the Connection Center focuses on IM bots and Feishu application authorization.
 - 飞书原“修复卡片按钮”操作已更名为“补全权限”，并会同时增量申请读取用户消息内图片或文件所需的 `im:message:readonly`、上传机器人图片或文件所需的 `im:resource`，以及卡片回调；缺权提示会引导用户私聊执行 `/repair`，或在插件页面点击“补全权限”。界面会说明各自用途，并明确确认页只展示应用当前缺少的配置。
   The former Feishu **Repair card buttons** action is now **Complete permissions**. It incrementally requests `im:message:readonly` for reading images or files in user messages, `im:resource` for uploading bot-sent images or files, and the card callback. The UI explains each purpose and that the confirmation page shows only the app's currently missing items.
 - 飞书 `/repair` 不再额外区分管理员和普通用户；所有通过当前机器人渠道访问策略的私聊用户都能发起修复，包括使用 `*` 开放访问的手动绑定机器人。
   Feishu `/repair` no longer defines a separate administrator role. Any direct-message user admitted by the current bot's channel access policy can start repair, including manually bound bots configured with `*` access.
 - 飞书私聊重复发送普通 `/repair` 时会作废仍在等待授权的旧一次性链接并生成新链接，避免错误账号打开链接后继续复用已消耗的授权码；查询、二维码、验证和取消命令不会意外重启流程，已提交的平台更新也不会并发执行。
   Repeating bare `/repair` in a Feishu direct chat now invalidates a still-pending one-time authorization link and generates a fresh one, avoiding reuse after the link was opened under the wrong account. Status, QR, verify, and cancel commands do not restart the flow, and a platform update that has already been submitted is never duplicated concurrently.
+
+### Fixed / 修复
+
+- 修复已有个人授权在页面加载后延迟同步、应用切换时误复用旧授权状态，以及连接成功后能力页把未授予权限错误显示为可用的问题。
+  Fixed delayed reconciliation of existing personal authorization, stale authorization reuse while switching applications, and capability UI entries being marked available without the required scopes.
 
 ## [2.3.0] - 2026-08-25
 

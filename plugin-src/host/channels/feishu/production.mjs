@@ -22,6 +22,7 @@ import {
   observeBotWorkspaceRemovals,
 } from '../../../../src/channels/shared/bot-workspace-store.mjs';
 import { listAgentPresetCatalog } from '../../../../src/channels/shared/agent-preset.mjs';
+import { USER_SCOPES as FEISHU_PERSONAL_USER_SCOPES } from '../../connectors/feishu-personal/scopes.js';
 
 function webSocketProxyUrl(env) {
   for (const key of ['https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY']) {
@@ -96,6 +97,21 @@ export async function createProductionController(ctx, config = {}, internals = {
     ?? await new WorkspaceStore(paths.workspaces, { defaultWorkspace }).load();
   const canListConfiguredBots = typeof configStore.list === 'function';
   const listConfiguredBots = () => canListConfiguredBots ? configStore.list() : [];
+  if (config.applicationService && canListConfiguredBots) {
+    for (const bot of listConfiguredBots()) {
+      const imported = await config.applicationService.importBot(bot);
+      if (imported.secretRef !== bot.secretRef) {
+        await configStore.saveBot({ ...bot, secretRef: imported.secretRef });
+        await config.applicationService.releaseLegacySecretRef(
+          imported.legacySecretRef,
+          imported.applicationId,
+        );
+      }
+    }
+    await config.applicationService.reconcileBotConsumers(
+      listConfiguredBots().map((bot) => bot.id),
+    );
+  }
   const configuredBots = listConfiguredBots();
   if (canListConfiguredBots) {
     await workspaces.reconcile(configuredBots.map((bot) => bot.id));
@@ -157,6 +173,8 @@ export async function createProductionController(ctx, config = {}, internals = {
     registerApp: (options) => lark.registerApp(options),
     verifyApp,
     credentials: ctx.credentials,
+    applicationService: config.applicationService,
+    sharedUserScopes: FEISHU_PERSONAL_USER_SCOPES,
     configStore: observedConfigStore,
     createRuntime: async ({ botId, config: botConfig, appSecret, repair }) => {
       const state = await stateFor(botConfig);

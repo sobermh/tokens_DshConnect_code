@@ -191,3 +191,19 @@ export async function ensureSkills(force = false) {
     await writeStamp(root, { larkVersion: version, skills: names, materializedAt: new Date().toISOString() });
     return { version, count: names.length, root, skipped: false };
 }
+
+/** Read the materialized Skills manifest without invoking lark-cli. */
+export async function inspectSkills(root = skillsRoot()) {
+    const stamp = await readStamp(root);
+    const sentinelOk = await fileExists(join(root, SENTINEL, 'SKILL.md'));
+    if (stamp === undefined || !sentinelOk) {
+        return { available: false, count: 0, names: [] };
+    }
+    return {
+        available: true,
+        version: stamp.larkVersion,
+        count: stamp.skills.length,
+        names: [...stamp.skills],
+        materializedAt: stamp.materializedAt,
+    };
+}

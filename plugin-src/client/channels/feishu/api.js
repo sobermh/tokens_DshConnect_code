@@ -18,6 +18,7 @@ export const FEISHU_ENDPOINTS = Object.freeze({
   pollProvisioning: "provision.poll",
   cancelProvisioning: "provision.cancel",
   bindCredentials: "bot.bind-credentials",
+  bindApplication: "bot.bind-application",
   reconnectBot: "bot.reconnect",
   disconnectBot: "bot.disconnect",
   deleteBot: "bot.delete",
@@ -157,6 +158,24 @@ function normalizeBot(value) {
   };
 }
 
+function normalizeApplication(value) {
+  if (!isRecord(value)) return undefined;
+  const applicationId = optionalString(value.applicationId);
+  if (!applicationId) return undefined;
+  const botIds = Array.isArray(value.botIds)
+    ? [...new Set(value.botIds.map(optionalString).filter(Boolean))]
+    : [];
+  return {
+    applicationId,
+    name: optionalString(value.name) ?? "飞书自建应用",
+    appIdMasked: optionalString(value.appIdMasked) ?? "cli_••••",
+    domain: value.domain === "lark" ? "lark" : "feishu",
+    botIds,
+    botCount: botIds.length,
+    usedByPersonal: value.usedByPersonal === true,
+  };
+}
+
 function normalizeHealth(value, connected = false) {
   const source = isRecord(value) ? value : {};
   const fallbackStatus = connected ? "healthy" : "offline";
@@ -245,12 +264,16 @@ export function normalizeBotsSnapshot(value) {
     ? value.revision
     : 0;
   const state = CONNECTION_STATES.has(value.state) ? value.state : "disconnected";
+  const applications = Array.isArray(value.applications)
+    ? value.applications.map(normalizeApplication).filter(Boolean)
+    : [];
 
   return {
     schemaVersion: value.schemaVersion === 2 ? 2 : 1,
     revision,
     state,
     bots,
+    applications,
     // Derive counts from the authoritative list so stale summary fields never
     // make the UI claim that an unavailable bot is online.
     totals: { configured, connected },

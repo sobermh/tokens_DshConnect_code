@@ -112,6 +112,16 @@ function ExternalIcon({ size = 15 }) {
   }));
 }
 
+function LinkIcon({ size = 16 }) {
+  return h(SvgIcon, { size },
+    h("path", {
+      d: "M9.5 14.5 8 16a3.54 3.54 0 0 1-5-5l3-3a3.54 3.54 0 0 1 5 0M14.5 9.5 16 8a3.54 3.54 0 0 1 5 5l-3 3a3.54 3.54 0 0 1-5 0M8.5 15.5l7-7",
+      stroke: "currentColor", strokeWidth: "1.7", strokeLinecap: "round",
+      strokeLinejoin: "round",
+    }),
+  );
+}
+
 function AlertIcon({ size = 22 }) {
   return h(SvgIcon, { size },
     h("path", {
@@ -150,22 +160,35 @@ function BrandMark() {
   return h("div", { className: "bxf-brandMark" }, h(RobotIcon, { size: 34 }));
 }
 
-function Heading({ totals, onAdd, onCredential, credentialOpen, adding, busy, addButtonRef }) {
+function Heading({
+  totals,
+  onAdd,
+  onCredential,
+  credentialOpen,
+  adding,
+  busy,
+  addButtonRef,
+  hasReusableApplications,
+}) {
   const hasBots = totals.configured > 0;
   return h("div", { className: "bxf-heading" },
     h("div", { className: "bxf-headingTools" },
       h("div", { className: "dim-bindActions" },
         h(Button, {
-          kind: "primary",
+          kind: hasReusableApplications ? "secondary" : "primary",
           size: "small",
-          className: "bxf-bindButton dim-scanButton",
+          className: "bxf-bindButton bxf-newApplicationButton dim-scanButton",
           onClick: onAdd,
           disabled: adding || busy,
           ref: addButtonRef,
           "aria-busy": busy ? "true" : undefined,
-          "aria-label": "扫码接入飞书机器人",
+          "aria-label": hasReusableApplications
+            ? "新建独立飞书应用并接入机器人"
+            : "创建飞书应用并接入机器人",
           icon: h(QrActionIcon),
-        }, adding ? "正在接入" : "扫码接入机器人"),
+        }, adding
+          ? "正在接入"
+          : hasReusableApplications ? "新建独立应用" : "创建应用并接入"),
         h(Button, {
           kind: "credential",
           size: "small",
@@ -186,6 +209,32 @@ function Heading({ totals, onAdd, onCredential, credentialOpen, adding, busy, ad
   );
 }
 
+function SharedApplicationBinding({ applications, value, onChange, onBind, busy, error }) {
+  if (applications.length === 0) return null;
+  return h("div", { className: "bxf-sharedApplication" },
+    h("div", { className: "bxf-sharedApplicationCopy" },
+      h("strong", null, "使用已有飞书应用"),
+      h("small", null, "复用同一份应用凭据；机器人连接与个人授权仍分别管理。")),
+    h("div", { className: "bxf-sharedApplicationControl" },
+      h("select", {
+        value,
+        onChange: (event) => onChange(event.target.value),
+        disabled: busy,
+        "aria-label": "选择已有飞书应用",
+      }, applications.map((application) => h("option", {
+        key: application.applicationId,
+        value: application.applicationId,
+      }, `${application.name} · ${application.appIdMasked}${application.usedByPersonal ? " · 个人授权共用" : ""}`))),
+      h(Button, {
+        kind: "primary",
+        size: "small",
+        onClick: onBind,
+        disabled: busy || !value,
+        icon: h(LinkIcon),
+      }, busy ? "正在接入" : "接入机器人")),
+    error ? h("div", { className: "bxf-sharedApplicationError", role: "alert" }, error.message) : null);
+}
+
 function LoadingView() {
   return h("div", {
     className: "bxf-card dim-surfaceCard dim-loadingView",
@@ -203,13 +252,13 @@ function EmptyView({ onStart, busy }) {
       h("div", { className: "bxf-introCopy dim-emptyCopy" },
         h("div", { className: "bxf-stateLabel dim-stateLabel" },
           h("span", { className: "bxf-dot dim-stateDot" }), h("span", null, "尚未接入机器人")),
-        h("h3", null, "扫码，创建第一个飞书入口"),
-        h("p", null, "无需手动填写 App ID。以后还可以继续添加机器人，分别服务不同团队或飞书租户。"),
+        h("h3", null, "创建飞书应用并接入机器人"),
+        h("p", null, "新应用可同时用于 IM 机器人与个人授权；本次只接入机器人，个人账号可稍后在“应用授权”中复用。"),
         h("div", { className: "bxf-actions dim-viewActions" },
           h(Button, {
             kind: "primary", onClick: onStart,
             disabled: busy, "aria-busy": busy ? "true" : undefined,
-          }, busy ? "正在生成二维码…" : "生成飞书二维码")),
+          }, busy ? "正在生成二维码…" : "创建应用并接入")),
       ),
       h("div", { className: "bxf-markStage dim-emptyBrand", "aria-hidden": "true" }, h(BrandMark)),
     ),
@@ -268,7 +317,7 @@ function QrPane({ provision, now, onRefresh, onCancel, busy }) {
                   ? `用于为${botName}补全权限与回调的一次性授权二维码`
                   : grantingGroupMessages
                     ? `用于为${botName}开通群消息权限的一次性授权二维码`
-                    : "用于新增 DeepSeek Harness 飞书机器人的一次性授权二维码",
+                    : "用于创建可复用飞书应用并接入机器人的一次性授权二维码",
                 onError: () => setImageFailed(true),
               })
             : h("div", { className: "bxf-qrFallback dim-qrFallback" },
@@ -296,31 +345,31 @@ function QrPane({ provision, now, onRefresh, onCancel, busy }) {
             ? `正在为「${botName}」补全权限与回调`
             : grantingGroupMessages
               ? `正在为「${botName}」开通群消息权限`
-              : "正在添加新机器人")),
+              : "正在创建应用并接入机器人")),
         h("h3", null, expired
           ? "刷新二维码后继续"
           : repairing
             ? "使用飞书扫码补全权限"
             : grantingGroupMessages
               ? "使用飞书确认群消息权限"
-              : "使用飞书扫码创建机器人"),
+              : "使用飞书扫码创建应用并接入机器人"),
         h("p", null, repairing
           ? "扫码会更新现有飞书应用，最多增量补充卡片按钮回调、读取用户消息内图片或文件所需的 im:message:readonly（飞书显示为“获取单聊、群组消息”），以及上传机器人图片或文件所需的 im:resource；不会创建新应用。确认页只显示当前缺少项，完成后此机器人会短暂重连，其他机器人不受影响。"
           : grantingGroupMessages
             ? "扫码会更新现有飞书应用，只增量开通“获取群组中所有消息”权限；不会创建新应用。确认后会自动启用“响应所有群消息”，其他机器人不受影响。"
-            : "扫码只会新增一个机器人，已接入的机器人会继续正常收发消息。"),
+            : "本次会创建一个可供 IM 机器人与个人授权共用的飞书自建应用，并先接入机器人。不会自动授权个人账号；个人授权可稍后在“应用授权”中复用此应用。已接入的机器人不会受到影响。"),
         h("ol", { className: "bxf-steps dim-steps" },
           h("li", null, "打开飞书移动端，使用扫一扫读取二维码"),
           h("li", null, repairing
             ? "核对现有应用名称，并确认只新增当前缺少的上述配置"
             : grantingGroupMessages
               ? "核对现有应用，并确认“获取群组中所有消息”权限"
-              : "核对应用名称与权限范围，并确认创建"),
+              : "核对应用名称、权限范围与事件配置，并确认创建"),
           h("li", null, repairing
             ? "保持本页打开，等待权限与回调补全完成"
             : grantingGroupMessages
               ? "保持本页打开，等待权限生效并自动切换响应方式"
-              : "保持本页打开，等待新机器人的长连接就绪")),
+              : "保持本页打开，等待应用创建并完成机器人长连接")),
         h("div", { className: "bxf-actions dim-viewActions" },
           expired
             ? h(Button, {
@@ -759,6 +808,7 @@ export function mergeFeishuSnapshotState(
     provisioning,
     pageError: null,
     statusError: null,
+    applications: snapshot.applications ?? current.applications,
     agentPresetCatalog: snapshot.agentPresetCatalog ?? current.agentPresetCatalog,
   };
 }
@@ -772,6 +822,7 @@ export function FeishuSettingsTab({ rpcCall }) {
     provisioning: null,
     pageError: null,
     statusError: null,
+    applications: [],
     agentPresetCatalog: EMPTY_AGENT_PRESET_CATALOG,
   });
   const [pageBusy, setPageBusy] = React.useState(false);
@@ -779,6 +830,9 @@ export function FeishuSettingsTab({ rpcCall }) {
   const [credentialOpen, setCredentialOpen] = React.useState(false);
   const [credentialBusy, setCredentialBusy] = React.useState(false);
   const [credentialError, setCredentialError] = React.useState(null);
+  const [sharedApplicationId, setSharedApplicationId] = React.useState("");
+  const [sharedApplicationBusy, setSharedApplicationBusy] = React.useState(false);
+  const [sharedApplicationError, setSharedApplicationError] = React.useState(null);
   const [busyByBot, setBusyByBot] = React.useState({});
   const [errorsByBot, setErrorsByBot] = React.useState({});
   const [testNoticesByBot, setTestNoticesByBot] = React.useState({});
@@ -847,6 +901,17 @@ export function FeishuSettingsTab({ rpcCall }) {
     void loadStatus({ signal: controller.signal, restoreProvisioning: true });
     return () => controller.abort();
   }, [loadStatus]);
+
+  const reusableApplications = React.useMemo(
+    () => model.applications.filter((application) => application.botCount === 0),
+    [model.applications],
+  );
+  React.useEffect(() => {
+    if (reusableApplications.some(
+      (application) => application.applicationId === sharedApplicationId,
+    )) return;
+    setSharedApplicationId(reusableApplications[0]?.applicationId ?? "");
+  }, [reusableApplications, sharedApplicationId]);
 
   // One list request refreshes every bot. This continues while a new bot is
   // being provisioned so existing connections never disappear from the UI.
@@ -1007,6 +1072,36 @@ export function FeishuSettingsTab({ rpcCall }) {
       setCredentialBusy(false);
     }
   }, [announce, invoke, loadStatus, mergeSnapshot, workspaceFence]);
+
+  const bindSharedApplication = React.useCallback(async () => {
+    if (!sharedApplicationId) return;
+    const snapshotVersion = workspaceFence.beginMutation();
+    setSharedApplicationBusy(true);
+    setSharedApplicationError(null);
+    try {
+      const snapshot = normalizeBotsSnapshot(await invoke(
+        FEISHU_ENDPOINTS.bindApplication,
+        { applicationId: sharedApplicationId },
+      ));
+      if (mountedRef.current && workspaceFence.canCommitMutation(snapshotVersion)) {
+        mergeSnapshot(snapshot);
+      }
+      announce("已有飞书应用已接入机器人。");
+    } catch (error) {
+      setSharedApplicationError(presentError(error));
+    } finally {
+      const shouldRefresh = workspaceFence.endMutation();
+      if (shouldRefresh && mountedRef.current) void loadStatus({ silent: true });
+      setSharedApplicationBusy(false);
+    }
+  }, [
+    announce,
+    invoke,
+    loadStatus,
+    mergeSnapshot,
+    sharedApplicationId,
+    workspaceFence,
+  ]);
 
   const cancelProvisioning = React.useCallback(async () => {
     const activeProvision = model.provisioning;
@@ -1480,8 +1575,17 @@ export function FeishuSettingsTab({ rpcCall }) {
       onCredential: () => { setCredentialOpen((value) => !value); setCredentialError(null); },
       credentialOpen,
       adding: Boolean(provision),
-      busy: provisionBusy || credentialBusy,
+      busy: provisionBusy || credentialBusy || sharedApplicationBusy,
       addButtonRef,
+      hasReusableApplications: reusableApplications.length > 0,
+    }),
+    h(SharedApplicationBinding, {
+      applications: reusableApplications,
+      value: sharedApplicationId,
+      onChange: (value) => { setSharedApplicationId(value); setSharedApplicationError(null); },
+      onBind: () => void bindSharedApplication(),
+      busy: sharedApplicationBusy,
+      error: sharedApplicationError,
     }),
     h("div", {
       className: "bxf-visuallyHidden", role: "status", "aria-live": "polite", "aria-atomic": "true",
@@ -1503,7 +1607,8 @@ export function FeishuSettingsTab({ rpcCall }) {
         : h(React.Fragment, null,
             credentialContent,
             targetedProvisioning ? null : provisionContent,
-            model.bots.length === 0 && !provision && !credentialOpen
+            model.bots.length === 0 && reusableApplications.length === 0
+              && !provision && !credentialOpen
               ? h(EmptyView, { onStart: () => void startProvisioning(), busy: provisionBusy })
               : null,
             model.bots.length > 0

@@ -68,6 +68,12 @@ function asRecord(value) {
 function asString(value) {
     return typeof value === 'string' && value !== '' ? value : undefined;
 }
+function stringList(value) {
+    const text = asString(value);
+    if (text === undefined)
+        return undefined;
+    return [...new Set(text.split(/\s+/).filter(Boolean))].sort();
+}
 function connectedFrom(tokenStatus, available) {
     switch (tokenStatus) {
         case 'valid':
@@ -93,16 +99,46 @@ function projectStatus(identity) {
     const openId = asString(identity['openId']) ?? asString(identity['open_id']);
     if (openId !== undefined)
         status.openId = openId;
+    if (typeof identity['verified'] === 'boolean')
+        status.verified = identity['verified'];
+    const scopes = stringList(identity['scope']);
+    if (scopes !== undefined) {
+        status.scopes = scopes;
+        status.scopeCount = scopes.length;
+    }
+    for (const field of ['grantedAt', 'expiresAt', 'refreshExpiresAt']) {
+        const value = asString(identity[field]);
+        if (value !== undefined)
+            status[field] = value;
+    }
     return status;
 }
 /** Pull the user identity out of `auth status` (nested `identities.user`, or a flat shape). */
-function statusFromMap(map) {
+export function statusFromMap(map) {
     const identities = asRecord(map['identities']);
     const user = identities === undefined ? undefined : asRecord(identities['user']);
-    if (user !== undefined)
-        return projectStatus(user);
-    // Backward-compat flat shape: fields live at the top level.
-    return projectStatus(map);
+    const bot = identities === undefined ? undefined : asRecord(identities['bot']);
+    const status = user !== undefined
+        ? projectStatus(user)
+        // Backward-compat flat shape: fields live at the top level.
+        : projectStatus(map);
+    const appId = asString(map['appId']) ?? asString(map['app_id']);
+    if (appId !== undefined)
+        status.appId = appId;
+    const brand = asString(map['brand']);
+    if (brand !== undefined)
+        status.brand = brand;
+    if (status.verified === undefined && typeof map['verified'] === 'boolean')
+        status.verified = map['verified'];
+    if (bot !== undefined) {
+        status.bot = {
+            available: bot['available'] === true,
+            ...(asString(bot['status']) === undefined ? {} : { status: asString(bot['status']) }),
+            ...(typeof bot['verified'] === 'boolean' ? { verified: bot['verified'] } : {}),
+            ...(asString(bot['appName']) === undefined ? {} : { appName: asString(bot['appName']) }),
+        };
+    }
+    return status;
 }
 /**
  * Build the non-secret argv for profile initialization. Kept separate so the
@@ -180,10 +216,14 @@ export function createLarkcli(options) {
             return statusFromMap(larkcliJSON(result.stdout));
         },
         /** Report the current user-identity connection state, or `undefined` if lark-cli is not installed. */
-        async status(signal) {
+        async status(signal, options = {}) {
             if ((await larkcliPath()) === undefined)
                 return undefined;
-            const result = await run(['auth', 'status', '--json', '--profile', profile], { signal });
+            const result = await run([
+                'auth', 'status', '--json',
+                ...(options.verify === true ? ['--verify'] : []),
+                '--profile', profile,
+            ], { signal });
             // `auth status` exits non-zero when logged out; the JSON still describes that.
             try {
                 return statusFromMap(larkcliJSON(result.stdout || result.stderr));

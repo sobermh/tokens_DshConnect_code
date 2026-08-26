@@ -82,7 +82,6 @@ test('Host composes message channels and service connectors inside one plugin co
     applyTelegram: async (ctx, config) => calls.push(['telegram', ctx, config]),
     applyDiscord: async (ctx, config) => calls.push(['discord', ctx, config]),
     applyWhatsapp: async (ctx, config) => calls.push(['whatsapp', ctx, config]),
-    applyOffice: async (ctx, config) => calls.push(['office', ctx, config]),
     applyFeishuPersonal: async (ctx, config) => calls.push(['feishuPersonal', ctx, config]),
   });
   const ctx = { marker: 'shared-context' };
@@ -97,7 +96,6 @@ test('Host composes message channels and service connectors inside one plugin co
     telegram: { replyTimeoutMs: 60_000 },
     discord: { replyTimeoutMs: 60_000 },
     whatsapp: { replyTimeoutMs: 60_000 },
-    office: { heartbeatSeconds: 30 },
     feishuPersonal: { appName: 'Local assistant' },
   };
 
@@ -121,7 +119,6 @@ test('Host composes message channels and service connectors inside one plugin co
     ['telegram', ctx, { ...config.telegram, rpcAuthority: 'trusted-host' }],
     ['discord', ctx, { ...config.discord, rpcAuthority: 'trusted-host' }],
     ['whatsapp', ctx, { ...config.whatsapp, rpcAuthority: 'trusted-host' }],
-    ['office', ctx, { ...config.office, rpcAuthority: 'trusted-host' }],
     ['feishuPersonal', ctx, {
       appIdEnv: 'FEISHU_APP_ID',
       appSecretEnv: 'FEISHU_APP_SECRET',
@@ -131,6 +128,32 @@ test('Host composes message channels and service connectors inside one plugin co
       profile: 'dsh-feishu',
     }],
   ]);
+});
+
+test('Host passes one shared Feishu application service to IM and personal authorization', async () => {
+  const service = { marker: 'shared-feishu-applications' };
+  const calls = [];
+  const noOp = async () => {};
+  const plugin = createImHostPlugin({
+    createFeishuApplicationService: async (ctx) => {
+      assert.equal(ctx.credentials.marker, 'credentials');
+      return service;
+    },
+    applyFeishu: async (_ctx, config) => calls.push(['im', config.applicationService]),
+    applyFeishuPersonal: async (_ctx, config) => calls.push(['personal', config.applicationService]),
+    applyWeixin: noOp,
+    applyDingtalk: noOp,
+    applyWecom: noOp,
+    applyQq: noOp,
+    applySlack: noOp,
+    applyTelegram: noOp,
+    applyDiscord: noOp,
+    applyWhatsapp: noOp,
+  });
+
+  await plugin.apply({ credentials: { marker: 'credentials' } }, {});
+
+  assert.deepEqual(calls, [['im', service], ['personal', service]]);
 });
 
 const CHANNELS = [
@@ -143,7 +166,6 @@ const CHANNELS = [
   ['telegram', 'applyTelegram'],
   ['discord', 'applyDiscord'],
   ['whatsapp', 'applyWhatsapp'],
-  ['office', 'applyOffice'],
   ['feishuPersonal', 'applyFeishuPersonal'],
 ];
 

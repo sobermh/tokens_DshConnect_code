@@ -155,6 +155,17 @@ test('Host exposes only browser-safe Agent Preset fields in status and update re
         harnessReachable: true,
       },
     }],
+    applications: [{
+      applicationId: 'app_safe',
+      name: '共享应用',
+      appIdMasked: 'cli_safe••••1234',
+      domain: 'feishu',
+      botIds: [],
+      botCount: 0,
+      usedByPersonal: true,
+      secretRef: 'DSH_FEISHU_APP_SECRET_PRIVATE',
+      appSecret: 'private-application-secret',
+    }],
   });
   const controller = {
     status: async () => current(),
@@ -849,23 +860,29 @@ test('multi-bot RPC operations require a botId and never expose host-only fields
     reconnectBot: async (botId) => { calls.push(['reconnect', botId]); return multi; },
     sendConnectionTest: async (botId) => { calls.push(['test-message', botId]); },
     disconnectBot: async (botId) => { calls.push(['disconnect', botId]); return multi; },
+    bindSharedApplication: async (applicationId) => {
+      calls.push(['bind-application', applicationId]);
+      return multi;
+    },
     deleteBot: async (botId) => { calls.push(['delete', botId]); return status({ schemaVersion: 2, bots: [] }); },
   };
   const fx = await rpcFixture(controller);
 
   for (const [endpoint, payload] of [
+    [FEISHU_MULTI_ENDPOINTS.bindApplication, { applicationId: 'app_safe' }],
     [FEISHU_MULTI_ENDPOINTS.reconnectBot, { botId: 'bot_safe', sendTest: true }],
     [FEISHU_MULTI_ENDPOINTS.disconnectBot, { botId: 'bot_safe' }],
     [FEISHU_MULTI_ENDPOINTS.deleteBot, { botId: 'bot_safe', confirm: true }],
   ]) {
     const result = await fx.registration.handler(endpoint, payload, signal());
     assert.equal(result.ok, true);
-    assert.doesNotMatch(JSON.stringify(result), /DSH_FEISHU_APP_SECRET|ou_private|cli_raw_private|private-token/);
+    assert.doesNotMatch(JSON.stringify(result), /DSH_FEISHU_APP_SECRET|ou_private|cli_raw_private|private-token|private-application-secret/);
     if (endpoint === FEISHU_MULTI_ENDPOINTS.reconnectBot) {
       assert.deepEqual(result.value.testMessage, { sent: true });
     }
   }
   assert.deepEqual(calls, [
+    ['bind-application', 'app_safe'],
     ['reconnect', 'bot_safe'],
     ['test-message', 'bot_safe'],
     ['disconnect', 'bot_safe'],
@@ -1194,7 +1211,7 @@ test('production assembly needs only ctx credentials and the active DSH webServe
   assert.equal(constructed.wsProxyUrl, 'http://proxy.test:8080');
   assert.equal(String(constructed.harness.baseUrl), 'http://127.0.0.1:43123/');
   assert.equal(constructed.harness.autostart, false);
-  assert.match(constructed.configPath, /integrations\/dsh-feishu\/config\.json$/);
+  assert.match(constructed.configPath, /integrations[\\/]dsh-feishu[\\/]config\.json$/);
 
   await constructed.controller.createRuntime({
     config: {
@@ -1204,7 +1221,7 @@ test('production assembly needs only ctx credentials and the active DSH webServe
     },
     appSecret: 'host-only',
   });
-  assert.match(constructed.statePath, /integrations\/dsh-feishu\/state\.json$/);
+  assert.match(constructed.statePath, /integrations[\\/]dsh-feishu[\\/]state\.json$/);
   assert.equal(constructed.runtime.appSecret, 'host-only');
   assert.equal(constructed.runtime.wsAgent, wsAgent);
   const repair = { start() {}, status() {}, cancel() {} };
@@ -1238,8 +1255,8 @@ test('production assembly needs only ctx credentials and the active DSH webServe
   const betaState = constructed.runtime.state;
   assert.equal(Object.hasOwn(constructed.runtime, 'outboundArtifactsEnabled'), false);
   assert.notEqual(alphaState, betaState);
-  assert.ok(constructed.statePaths.some((path) => /bots\/bot_alpha\/state\.json$/.test(path)));
-  assert.ok(constructed.statePaths.some((path) => /bots\/bot_beta\/state\.json$/.test(path)));
+  assert.ok(constructed.statePaths.some((path) => /bots[\\/]bot_alpha[\\/]state\.json$/.test(path)));
+  assert.ok(constructed.statePaths.some((path) => /bots[\\/]bot_beta[\\/]state\.json$/.test(path)));
   await production.close();
   assert.equal(constructed.closed, true);
   assert.equal(constructed.harnessStopped, true);

@@ -1,20 +1,30 @@
 export const IM_STYLE_ID = 'tokens-dsh-connect-settings';
 
 const CSS = String.raw`
+button[data-dsh-connect-nav="true"] > svg { display: none; }
+button[data-dsh-connect-nav="true"]::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='16' y='16' width='6' height='6' rx='1'/%3E%3Crect x='2' y='16' width='6' height='6' rx='1'/%3E%3Crect x='9' y='2' width='6' height='6' rx='1'/%3E%3Cpath d='M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3'/%3E%3Cpath d='M12 12V8'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='16' y='16' width='6' height='6' rx='1'/%3E%3Crect x='2' y='16' width='6' height='6' rx='1'/%3E%3Crect x='9' y='2' width='6' height='6' rx='1'/%3E%3Cpath d='M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3'/%3E%3Cpath d='M12 12V8'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 .dim-page {
   --dim-blue: var(--dsw-alias-state-business-primary, #3370ff);
   --dim-blue-soft: color-mix(in srgb, var(--dim-blue) 9%, transparent);
   width: 100%;
-  max-width: 1080px;
+  max-width: 760px;
   padding: 2px 0 30px;
   color: var(--dsw-alias-label-primary, #1f2329);
   box-sizing: border-box;
 }
 .dim-page *, .dim-page *::before, .dim-page *::after { box-sizing: border-box; }
-.dim-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 18px; }
+.dim-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin: 0; }
 .dim-brand { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
-.dim-brandName { color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 24px; font-weight: 760; letter-spacing: 0; }
-.dim-title p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
+.dim-brandName { color: var(--dsw-alias-label-primary, #1f2329); font-size: 18px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
+.dim-title p { margin: 0; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 13px; line-height: 20px; font-weight: 400; white-space: nowrap; }
 .dim-githubAction { position: relative; display: inline-flex; flex: none; }
 .dim-githubLink { min-height: 30px; display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-secondary, #646a73); background: var(--dsw-alias-bg-layer-1, #fff); font-size: 12px; line-height: normal; font-weight: 560; text-decoration: none; transition: border-color .15s ease, color .15s ease, background .15s ease; }
 .dim-githubLink:hover { border-color: #aeb3bb; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-interactive-bg-hover, #f7f8fa); }
@@ -22,13 +32,16 @@ const CSS = String.raw`
 .dim-githubArrow { font-size: 13px; line-height: 1; }
 .dim-githubTooltip { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20; width: max-content; max-width: min(220px, 80vw); padding: 6px 9px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 7px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-3, #fff); box-shadow: 0 8px 24px rgb(31 35 41 / 14%); font-size: 11px; line-height: 16px; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; transform: translateY(3px); pointer-events: none; transition: opacity .15s ease, transform .15s ease, visibility .15s ease; }
 .dim-githubAction:hover .dim-githubTooltip, .dim-githubAction:focus-within .dim-githubTooltip { opacity: 1; visibility: visible; transform: translateY(0); }
-.dim-layout { display: grid; grid-template-columns: 174px 1px minmax(0, 1fr); gap: 24px; align-items: start; }
-.dim-rail { max-height: 560px; display: grid; align-content: start; gap: 16px; overflow-y: auto; padding: 1px 4px 1px 1px; scrollbar-width: thin; scrollbar-color: var(--dsw-alias-border-l2, #dfe1e5) transparent; }
-.dim-rail::-webkit-scrollbar { width: 4px; }
-.dim-rail::-webkit-scrollbar-thumb { border-radius: 99px; background: var(--dsw-alias-border-l2, #dfe1e5); }
+.dim-modeTabs { display: flex; align-items: flex-end; gap: 22px; margin-top: 14px; border-bottom: 1px solid var(--dsw-alias-border-l2, #dfe1e5); }
+.dim-modeTab { position: relative; min-width: 0; padding: 7px 1px 9px; border: 0; color: var(--dsw-alias-label-tertiary, #8f959e); background: transparent; font: inherit; font-size: 13px; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.dim-modeTab:hover, .dim-modeTab[data-active="true"] { color: var(--dsw-alias-label-primary, #1f2329); }
+.dim-modeTab[data-active="true"]::after, .dim-modeTab:focus-visible::after { content: ""; position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--dsw-alias-label-primary, #1f2329); }
+.dim-modeTab:focus-visible { border-radius: 2px; outline: 2px solid var(--dim-blue); outline-offset: 2px; color: var(--dsw-alias-label-primary, #1f2329); }
+.dim-modePanel { min-width: 0; padding-top: 14px; }
+.dim-layout { display: grid; grid-template-columns: 174px 1px minmax(0, 1fr); gap: 24px; align-items: stretch; }
+.dim-rail { display: grid; align-content: start; gap: 7px; padding: 1px; }
 .dim-channelGroup { min-width: 0; display: grid; align-content: start; gap: 7px; }
-.dim-channelGroupLabel { padding: 0 8px; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 10px; line-height: 16px; font-weight: 650; }
-.dim-channel { width: 100%; min-height: 48px; display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l2, #eef0f3); border-radius: 14px; color: inherit; background: var(--dsw-alias-bg-layer-3, #fff); box-shadow: 0 2px 8px rgb(31 35 41 / 3%); font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
+.dim-channel { width: 100%; min-height: 44px; display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--dsw-alias-border-l2, #eef0f3); border-radius: 8px; color: inherit; background: var(--dsw-alias-bg-layer-3, #fff); box-shadow: 0 1px 3px rgb(31 35 41 / 4%); font: inherit; text-align: left; cursor: pointer; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
 .dim-channel:hover { border-color: color-mix(in srgb, var(--dim-blue) 25%, var(--dsw-alias-border-l2, #eef0f3)); background: color-mix(in srgb, var(--dim-blue) 2%, var(--dsw-alias-bg-layer-3, #fff)); box-shadow: 0 5px 16px rgb(31 35 41 / 5%); }
 .dim-channel[aria-selected="true"] { border-color: color-mix(in srgb, var(--dim-blue) 43%, var(--dsw-alias-border-l2, #dfe1e5)); color: var(--dim-blue); background: color-mix(in srgb, var(--dim-blue) 12%, var(--dsw-alias-bg-layer-3, #fff)); box-shadow: 0 3px 12px rgb(51 112 255 / 7%); }
 .dim-channel:focus-visible { outline: none; border-color: color-mix(in srgb, var(--dim-blue) 72%, var(--dsw-alias-border-l2, #dfe1e5)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--dim-blue) 24%, transparent) inset, 0 3px 12px rgb(51 112 255 / 7%); }
@@ -46,8 +59,6 @@ const CSS = String.raw`
 .dim-logoWecom svg { width: 22px; height: 22px; }
 .dim-logoTelegram { color: white; background: #229ed9; }
 .dim-logoTelegram svg { width: 21px; height: 21px; }
-.dim-logoOffice { color: white; background: linear-gradient(145deg, #12213f, #3964fe); }
-.dim-logoOffice svg { width: 23px; height: 23px; }
 .dim-logoDiscord { color: white; background: #5865f2; }
 .dim-logoDiscord svg { width: 21px; height: 21px; }
 .dim-logoSlack { color: white; background: #4a154b; }
@@ -57,7 +68,7 @@ const CSS = String.raw`
 .dim-channelCopy { min-width: 0; display: grid; }
 .dim-channelCopy strong { overflow: hidden; color: inherit; font-size: 14px; line-height: 20px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .dim-channelNote { overflow: hidden; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 10px; line-height: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.dim-divider { width: 1px; min-height: 560px; background: var(--dsw-alias-border-l1, #eef0f3); }
+.dim-divider { width: 1px; background: var(--dsw-alias-border-l1, #eef0f3); }
 .dim-panel { min-width: 0; container-type: inline-size; }
 .dim-loopbackRecovery { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 14px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--dsw-alias-state-warn-primary, #d97706) 30%, var(--dsw-alias-border-l2, #dfe1e5)); border-radius: 12px; color: var(--dsw-alias-label-primary, #1f2329); background: color-mix(in srgb, var(--dsw-alias-state-warn-primary, #d97706) 8%, var(--dsw-alias-bg-layer-1, #fff)); }
 .dim-loopbackRecoveryCopy { min-width: 0; }
@@ -262,9 +273,9 @@ const CSS = String.raw`
 @media (max-width: 840px) {
   .dim-title { align-items: flex-start; }
   .dim-layout { grid-template-columns: minmax(0, 1fr); gap: 18px; }
-  .dim-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dim-rail { min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dim-channelGroup { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dim-divider { display: none; }
-  .dim-rail { max-height: none; overflow: visible; padding-right: 1px; }
   .dim-channel { min-height: 48px; }
 }
 @media (max-width: 720px) {
@@ -275,7 +286,7 @@ const CSS = String.raw`
   .dim-title { flex-direction: column; gap: 10px; }
   .dim-title p { white-space: normal; }
   .dim-githubTooltip { right: auto; left: 0; }
-  .dim-rail { grid-template-columns: minmax(0, 1fr); }
+  .dim-rail, .dim-channelGroup { grid-template-columns: minmax(0, 1fr); }
   .dim-loopbackRecovery { align-items: stretch; flex-direction: column; gap: 12px; }
   .dim-loopbackRecoveryAction { width: 100%; }
   .dim-directoryPickerBackdrop { padding: 10px; }

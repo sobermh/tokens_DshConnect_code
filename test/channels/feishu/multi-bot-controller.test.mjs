@@ -57,6 +57,8 @@ function fixture({
   verifyApp,
   credentialSet,
   deleteState,
+  applicationService,
+  sharedUserScopes,
 } = {}) {
   const configStore = new MemoryConfigStore(bots);
   const values = new Map(Object.entries(secrets));
@@ -93,6 +95,8 @@ function fixture({
         values.delete(ref);
       },
     },
+    applicationService,
+    sharedUserScopes,
     configStore,
     createRuntime: async ({ botId, config, appSecret, repair }) => {
       const status = {
@@ -172,8 +176,11 @@ function callbackRepairQrUrl(appId, domain = 'feishu') {
   return `https://${host}/page/launcher?tp=sdk&clientID=${encodeURIComponent(appId)}&addons=encoded`;
 }
 
-test('QR registration separates events from card callbacks', async () => {
-  const fx = fixture({ createBotIds: ['bot_callbacks'] });
+test('QR registration separates events from card callbacks and prepares personal OAuth reuse', async () => {
+  const fx = fixture({
+    createBotIds: ['bot_callbacks'],
+    sharedUserScopes: ['offline_access', 'docx:document:create'],
+  });
   const started = fx.controller.startRegistration();
   const attemptId = started.registration.attempt;
   await waitFor(() => fx.registrationRuns.length === 1);
@@ -181,6 +188,7 @@ test('QR registration separates events from card callbacks', async () => {
   assert.deepEqual(run.options.addons.events.items.tenant, ['im.message.receive_v1']);
   assert.deepEqual(run.options.addons.callbacks.items, ['card.action.trigger']);
   assert.ok(run.options.addons.scopes.tenant.includes('im:resource'));
+  assert.deepEqual(run.options.addons.scopes.user, ['offline_access', 'docx:document:create']);
   assert.equal(run.options.addons.scopes.tenant.includes('im:resource:upload'), false);
   run.options.onQRCodeReady({ url: 'https://accounts.feishu.cn/callbacks', expireIn: 60 });
   run.resolve({
@@ -740,6 +748,63 @@ test('manual Feishu credentials are verified, stored host-side, and use app visi
   assert.equal(fx.values.get(fx.configStore.bots[0].secretRef), 'manual-private-secret');
   assert.equal(fx.runtimes.get('bot_manual')[0].appSecret, 'manual-private-secret');
   assert.doesNotMatch(JSON.stringify(status), /manual-private-secret|ownerOpenIds|secretRef/);
+  await fx.controller.close();
+});
+
+test('an existing shared application can attach a bot without duplicating or deleting its secret', async () => {
+  const application = {
+    applicationId: 'app_shared',
+    name: '共享飞书应用',
+    appIdMasked: 'cli_shar••••ared',
+    domain: 'feishu',
+    botIds: [],
+    botCount: 0,
+    usedByPersonal: true,
+  };
+  const secretRef = 'DSH_FEISHU_APP_SECRET_SHARED';
+  const applicationService = {
+    listPublic: () => [structuredClone(application)],
+    getPublic: (id) => id === application.applicationId ? structuredClone(application) : null,
+    async resolveCredentials(id) {
+      assert.equal(id, application.applicationId);
+      return {
+        applicationId: id,
+        appId: 'cli_shared',
+        appSecret: 'shared-secret',
+        secretRef,
+        domain: 'feishu',
+        name: application.name,
+      };
+    },
+    async storeApplication() { return structuredClone(application); },
+    async attachBot(id, botId) {
+      assert.equal(id, application.applicationId);
+      application.botIds = [botId];
+      application.botCount = 1;
+    },
+    async detachBot(botId) {
+      application.botIds = application.botIds.filter((candidate) => candidate !== botId);
+      application.botCount = application.botIds.length;
+    },
+  };
+  const fx = fixture({
+    createBotIds: ['bot_shared'],
+    secrets: { [secretRef]: 'shared-secret' },
+    applicationService,
+  });
+
+  const attached = await fx.controller.bindSharedApplication(application.applicationId);
+  assert.equal(attached.totals.connected, 1);
+  assert.equal(fx.configStore.getBot('bot_shared').secretRef, secretRef);
+  assert.equal(fx.runtimes.get('bot_shared')[0].appSecret, 'shared-secret');
+  assert.equal(attached.applications[0].usedByPersonal, true);
+  assert.doesNotMatch(JSON.stringify(attached), /shared-secret|secretRef/);
+
+  const removed = await fx.controller.deleteBot('bot_shared');
+  assert.equal(removed.totals.configured, 0);
+  assert.equal(application.botCount, 0);
+  assert.equal(fx.values.get(secretRef), 'shared-secret');
+  assert.deepEqual(fx.unsetCalls, []);
   await fx.controller.close();
 });
 

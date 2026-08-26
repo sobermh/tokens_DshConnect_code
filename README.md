@@ -10,7 +10,7 @@
   <p><strong>Connecting DeepSeek Harness</strong></p>
 
   <p>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshIm_code" alt="MIT 许可证"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshConnect_code" alt="MIT 许可证"></a>
     <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-5865f2" alt="DeepSeek Harness">
   </p>
 
@@ -31,13 +31,15 @@
 
 ---
 
-> 本仓库基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 演进，运行包名为 `@tokens/dsh-connect`。原项目作者、历史贡献和 MIT 许可证完整保留；当前版本将 IM、飞书个人账号与 AI Office 合并为 TokensHarness 的统一连接中心。
+> 本仓库基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 演进，运行包名为 `@tokens/dsh-connect`。原项目作者、历史贡献和 MIT 许可证完整保留；当前版本将 IM 机器人与飞书个人账号授权整合为 TokensHarness 的统一连接中心。
 
 ## 简介
 
-通过扫码、App Manifest 或已有机器人凭据把 IM 机器人接入 DeepSeek Harness，通过 OAuth 连接飞书个人账号，并让本机 Harness 主动连接公网 AI Office。一个插件、一个「连接中心」设置入口，统一管理九种 IM 渠道、飞书个人账号和 AI Office Connector。**每个 IM 渠道都支持接入多个机器人**，各机器人的连接状态、工作区和会话绑定彼此独立。
+通过扫码、App Manifest 或已有机器人凭据把 IM 机器人接入 DeepSeek Harness，并通过 OAuth 连接一个飞书个人账号。一个插件、一个「连接中心」设置入口，分为「IM机器人」和「应用授权」两类，统一管理九种 IM 渠道与飞书个人账号授权。**每个 IM 渠道都支持接入多个机器人**，各机器人的连接状态、工作区和会话绑定彼此独立。
 
-Connect IM bots to DeepSeek Harness, authorize a personal Feishu account through OAuth, and let the local Harness connect outward to a public AI Office. One Connection Center entry manages nine multi-bot IM channels, Personal Feishu, and the AI Office Connector.
+飞书使用统一的「应用」资源：App ID 与 App Secret 只保存一份，飞书机器人和个人 OAuth 可以复用同一个应用，也可以明确创建独立应用。机器人运行时、聊天会话和个人 OAuth Token 始终分开；移除机器人不会退出个人授权，解除个人授权也不会停止机器人。升级时会按 App ID 导入旧配置，相同 App ID 自动归并，不同 App ID 保持为独立应用。
+
+Connect IM bots to DeepSeek Harness and authorize one personal Feishu account through OAuth. One Connection Center entry manages nine multi-bot IM channels and the personal Feishu authorization.
 
 ## 界面
 
@@ -79,30 +81,20 @@ Connect IM bots to DeepSeek Harness, authorize a personal Feishu account through
 | Discord | Developer Portal 的 Bot 设置中需启用 **Message Content Intent**；机器人需有 **Send Messages**、**Create Public Threads**、**Send Messages in Threads** 和 **Read Message History** 权限；发送结果文件还需 **Attach Files**。实际附件额度由当前账号与服务器能力决定。 |
 | WhatsApp | 当前绑定会话需支持 Document Message，实际可发送范围以 WhatsApp/Baileys 返回为准。 |
 
-## AI Office Connector
-
-「AI Office」页让本机 Harness 主动连接公网 Office，本机无需公网 IP、端口转发或 WebSocket 服务。Device Token 只写入 Harness 凭据存储；普通配置文件仅保存设备 ID、Office Origin、工作区 alias 和 Instruction Preset alias。Office 只能选择 alias，不会收到本机绝对路径。
-
-当前协议版本为 `office-harness.v1`。连接器使用 `POST /api/harness/connector/heartbeat` 完成鉴权和能力握手，再以 `GET /api/harness/connector/stream` 建立 SSE 下行；设置页会从 Office Base URL 自动展示全部固定 Hook，并在断线后按退避策略自动重连。
-
-Office 的 `job.available` 会触发本机拉取任务、校验 Workspace/Preset alias、领取 90 秒租约并每 30 秒续租。连接器创建独立 Harness Session，把状态、工具名和增量文字安全回传 Office，终态只允许写入一次。Harness 发起的工具审批或补充问题会进入 Office 人工面板；批准、拒绝或文字答案再经 SSE 回到原 Session，断线时由租约与 Heartbeat 恢复。
-
-Heartbeat 成功响应必须是 JSON：`{"ok":true,"protocolVersion":"office-harness.v1"}`。这使「连接测试通过」代表命中了兼容的 Office Connector，而不只是某个碰巧返回 200 的网址。
-
 ## 安装
 
 推荐从 npm 安装已发布的稳定版本：
 
 ```sh
-dsh plugin --profile web add -w @tokens/dsh-connect@2.4.2
+dsh plugin --profile web add -w @tokens/dsh-connect@2.4.3
 ```
 
-重启 `dsh web`，然后打开「设置 → 插件 → 连接中心」。桌面端本地测试时，把 profile 改为 `desktop`，也可以把包名替换为本机 `.tgz` 的绝对路径。
+重启 `dsh web`，然后打开「设置 → 连接中心」。桌面端本地测试时，把 profile 改为 `desktop`，也可以把包名替换为本机 `.tgz` 的绝对路径。
 
 如需试用尚未发布到 npm 的最新代码，可以改用 GitHub 源安装器：
 
 ```sh
-npx -y github:sobermh/tokens_DshIm_code install
+npx -y github:sobermh/tokens_DshConnect_code install
 ```
 
 GitHub 源安装会直接拉取并构建 Git 依赖；pnpm 10 及以上版本可能要求先在 profile 的 `pnpm-workspace.yaml` 中允许该依赖执行构建脚本。普通用户建议优先使用 npm 稳定版。
@@ -213,12 +205,13 @@ Slack 桌面端若未注册同名的原生 Slash Command，会拦截直接以 `/
 
 ## 设计
 
-- Harness 中只注册一个「连接中心」设置页，按「消息通道」和「服务连接」分组展示九个 IM 渠道、飞书个人账号与 AI Office Connector；
-- 九个渠道、飞书个人连接及 Office Connector 的 Host、客户端与运行时源码都在本仓库维护，不依赖外部独立插件；
+- Harness 中只注册一个「连接中心」设置页，按「IM机器人」和「应用授权」展示九个 IM 渠道与一个飞书个人账号；
+- 九个渠道与飞书个人连接的 Host、客户端与运行时源码都在本仓库维护，不依赖外部独立插件；
 - 设置页跟随 DeepSeek Harness 的语言选择，在中文和 English 之间即时切换；机器人发出的聊天消息跟随 Host 的 `language` 配置（默认中文；设为 `en` 即为英文），中文始终为兜底，未收录的文案原样输出；
-- 左侧使用原 dsh-im 的 Logo 与卡片布局切换微信、飞书机器人、钉钉、企业微信、QQ、Slack、Telegram、Discord、WhatsApp、飞书个人账号和 AI Office；
-- 九个 IM 渠道保持独立的 RPC、凭据、连接监督和会话映射；飞书个人连接保留 `dsh-feishu` profile 并提供文档、消息和多维表格工具；Office Connector 另行维护设备凭据、Job 租约、审批等待与并发上限；
-- 浏览器只获得二维码、Manifest、脱敏状态，以及用户为当前 Telegram 或 WhatsApp 机器人主动保存的访问模式和白名单标识；手动输入的 Secret 或 Token 仅单向提交给本机 Host，任何 RPC 响应都不会返回 App Secret、`bot_token`、钉钉 `client_secret`、企业微信 Secret、QQ `app_secret`、Slack Bot/App Token、Telegram/Discord Bot Token、WhatsApp 关联设备密钥、AI Office Device Token，或从平台消息中观察到的其他原始用户标识。
+- 左侧使用原 dsh-im 的 Logo 与卡片布局切换微信、飞书机器人、钉钉、企业微信、QQ、Slack、Telegram、Discord、WhatsApp 和飞书个人账号；
+- 九个 IM 渠道保持独立的 RPC、凭据、连接监督和会话映射；飞书个人连接保留 `dsh-feishu` profile 并提供文档、消息和多维表格工具；
+- 飞书应用注册表统一保存非敏感应用元数据和消费者关系，每个应用只对应一份受保护的 App Secret；机器人与个人 OAuth 分别附加或解除，不级联删除另一侧；
+- 浏览器只获得二维码、Manifest、脱敏状态，以及用户为当前 Telegram 或 WhatsApp 机器人主动保存的访问模式和白名单标识；手动输入的 Secret 或 Token 仅单向提交给本机 Host，任何 RPC 响应都不会返回 App Secret、`bot_token`、钉钉 `client_secret`、企业微信 Secret、QQ `app_secret`、Slack Bot/App Token、Telegram/Discord Bot Token、WhatsApp 关联设备密钥，或从平台消息中观察到的其他原始用户标识。
 
 ## 本地开发
 

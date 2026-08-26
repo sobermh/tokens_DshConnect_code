@@ -1,7 +1,7 @@
 {
   "name": "@tokens/dsh-connect",
-  "version": "2.4.2",
-  "description": "统一管理九种 IM 机器人、飞书个人账号和公网 AI Office，并接入本机 DeepSeek Harness。",
+  "version": "2.4.3",
+  "description": "统一管理九种 IM 机器人与飞书个人账号授权，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -20,7 +20,6 @@
     "telegram",
     "discord",
     "whatsapp",
-    "ai-office",
     "personal-oauth",
     "connection-center"
   ],
@@ -42,10 +41,10 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sobermh/tokens_DshIm_code.git"
+    "url": "git+https://github.com/sobermh/tokens_DshConnect_code.git"
   },
-  "homepage": "https://github.com/sobermh/tokens_DshIm_code#readme",
-  "bugs": "https://github.com/sobermh/tokens_DshIm_code/issues",
+  "homepage": "https://github.com/sobermh/tokens_DshConnect_code#readme",
+  "bugs": "https://github.com/sobermh/tokens_DshConnect_code/issues",
   "publishConfig": {
     "access": "public"
   },

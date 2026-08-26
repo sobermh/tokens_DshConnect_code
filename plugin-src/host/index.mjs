@@ -1,6 +1,5 @@
 import { apply as applyDingtalk } from './channels/dingtalk/index.mjs';
 import { apply as applyDiscord } from './channels/discord/index.mjs';
-import { apply as applyOffice } from './channels/office/index.mjs';
 import { apply as applyFeishu } from './channels/feishu/index.mjs';
 import { apply as applyQq } from './channels/qq/index.mjs';
 import { apply as applySlack } from './channels/slack/index.mjs';
@@ -10,6 +9,7 @@ import { apply as applyWeixin } from './channels/weixin/index.mjs';
 import { apply as applyWhatsapp } from './channels/whatsapp/index.mjs';
 import { installOutboundArtifactTool } from '../../src/channels/shared/semantic/artifact.mjs';
 import { setImHostLanguage } from '../../src/channels/shared/i18n.mjs';
+import { createFeishuApplicationService } from './feishu-application-service.mjs';
 
 export const name = 'dsh-connect-host';
 export const inject = [
@@ -20,15 +20,18 @@ export const inject = [
   'typertGateway',
 ];
 
-function channelConfig(config, name) {
+function channelConfig(config, name, applicationService) {
   const channel = config[name] ?? {};
-  return config.rpcAuthority === undefined
+  const resolved = config.rpcAuthority === undefined
     ? channel
     : { ...channel, rpcAuthority: config.rpcAuthority };
+  return name === 'feishu' && applicationService
+    ? { ...resolved, applicationService }
+    : resolved;
 }
 
-function feishuPersonalConfig(config) {
-  return {
+function feishuPersonalConfig(config, applicationService) {
+  const resolved = {
     appIdEnv: 'FEISHU_APP_ID',
     appSecretEnv: 'FEISHU_APP_SECRET',
     baseURL: 'https://open.feishu.cn',
@@ -37,6 +40,7 @@ function feishuPersonalConfig(config) {
     profile: 'dsh-feishu',
     ...(config.feishuPersonal ?? {}),
   };
+  return applicationService ? { ...resolved, applicationService } : resolved;
 }
 
 async function loadFeishuPersonalConnector() {
@@ -72,9 +76,10 @@ export function createImHostPlugin(internals = {}) {
   const startSlack = internals.applySlack ?? applySlack;
   const startTelegram = internals.applyTelegram ?? applyTelegram;
   const startDiscord = internals.applyDiscord ?? applyDiscord;
-  const startOffice = internals.applyOffice ?? applyOffice;
   const startWhatsapp = internals.applyWhatsapp ?? applyWhatsapp;
   const startFeishuPersonal = internals.applyFeishuPersonal ?? applyFeishuPersonalConnector;
+  const createApplicationService = internals.createFeishuApplicationService
+    ?? createFeishuApplicationService;
   const channels = [
     ['feishu', startFeishu],
     ['weixin', startWeixin],
@@ -85,7 +90,6 @@ export function createImHostPlugin(internals = {}) {
     ['telegram', startTelegram],
     ['discord', startDiscord],
     ['whatsapp', startWhatsapp],
-    ['office', startOffice],
     ['feishuPersonal', startFeishuPersonal],
   ];
   return Object.freeze({
@@ -103,12 +107,24 @@ export function createImHostPlugin(internals = {}) {
       const logger = typeof ctx?.logger === 'function'
         ? ctx.logger(name)
         : (ctx?.logger ?? console);
+      let applicationService = config.applicationService;
+      let applicationServiceError;
+      if (!applicationService && ctx?.credentials) {
+        try {
+          applicationService = await createApplicationService(ctx, config);
+        } catch (error) {
+          applicationServiceError = error;
+        }
+      }
       const failures = [];
       for (const [channel, start] of channels) {
         try {
+          if (applicationServiceError && (channel === 'feishu' || channel === 'feishuPersonal')) {
+            throw applicationServiceError;
+          }
           await start(ctx, channel === 'feishuPersonal'
-            ? feishuPersonalConfig(config)
-            : channelConfig(config, channel));
+            ? feishuPersonalConfig(config, applicationService)
+            : channelConfig(config, channel, applicationService));
         } catch (error) {
           failures.push(error);
           logger.error?.(

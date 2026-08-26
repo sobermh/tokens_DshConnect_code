@@ -35,7 +35,12 @@ async function postForm(host, form, signal) {
 }
 /** JSON → gzip → URL-safe base64 without padding, matching node-sdk encodeAddons. */
 function encodeAddons(tenantScopes, userScopes) {
-    const payload = { scopes: { tenant: [...tenantScopes], user: [...userScopes] } };
+    const payload = {
+        preset: false,
+        scopes: { tenant: [...tenantScopes], user: [...userScopes] },
+        events: { items: { tenant: ['im.message.receive_v1'] } },
+        callbacks: { items: ['card.action.trigger'] },
+    };
     return gzipSync(Buffer.from(JSON.stringify(payload))).toString('base64url');
 }
 /** Accept only HTTPS confirmation pages owned by the selected platform. */

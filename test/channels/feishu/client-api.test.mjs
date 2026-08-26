@@ -17,6 +17,7 @@ import {
 test('multi-bot endpoints are bot-scoped and keep legacy operations separate', () => {
   assert.equal(FEISHU_ENDPOINTS.beginCallbackRepair, 'bot.callback-repair.begin');
   assert.equal(FEISHU_ENDPOINTS.beginGroupMessagePermission, 'bot.group-message-permission.begin');
+  assert.equal(FEISHU_ENDPOINTS.bindApplication, 'bot.bind-application');
   assert.equal(FEISHU_ENDPOINTS.reconnectBot, 'bot.reconnect');
   assert.equal(FEISHU_ENDPOINTS.disconnectBot, 'bot.disconnect');
   assert.equal(FEISHU_ENDPOINTS.deleteBot, 'bot.delete');
@@ -56,6 +57,15 @@ test('client normalizes multiple independent bots and derives authoritative tota
         error: { code: 'connection_failed', message: '连接失败' },
       },
     ],
+    applications: [{
+      applicationId: 'app-shared',
+      name: '共享应用',
+      appIdMasked: 'cli_shar••••ared',
+      domain: 'feishu',
+      botIds: ['bot-a'],
+      usedByPersonal: true,
+      secretRef: 'must-not-leak',
+    }],
   });
 
   assert.equal(snapshot.schemaVersion, 2);
@@ -70,6 +80,16 @@ test('client normalizes multiple independent bots and derives authoritative tota
   assert.equal(snapshot.bots[1].bot.domain, 'lark');
   assert.equal(snapshot.bots[1].error.message, '连接失败');
   assert.equal('clientSecret' in snapshot.bots[0].bot, false);
+  assert.deepEqual(snapshot.applications, [{
+    applicationId: 'app-shared',
+    name: '共享应用',
+    appIdMasked: 'cli_shar••••ared',
+    domain: 'feishu',
+    botIds: ['bot-a'],
+    botCount: 1,
+    usedByPersonal: true,
+  }]);
+  assert.equal('secretRef' in snapshot.applications[0], false);
 });
 
 test('multi-bot snapshot rejects entries without an opaque botId', () => {

@@ -16,6 +16,7 @@ import {
 
 test('multi-bot endpoints are bot-scoped and keep legacy operations separate', () => {
   assert.equal(FEISHU_ENDPOINTS.beginCallbackRepair, 'bot.callback-repair.begin');
+  assert.equal(FEISHU_ENDPOINTS.bindApplication, 'bot.bind-application');
   assert.equal(FEISHU_ENDPOINTS.reconnectBot, 'bot.reconnect');
   assert.equal(FEISHU_ENDPOINTS.disconnectBot, 'bot.disconnect');
   assert.equal(FEISHU_ENDPOINTS.deleteBot, 'bot.delete');

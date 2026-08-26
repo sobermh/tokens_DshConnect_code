@@ -96,20 +96,21 @@ if (!client.includes('id: "connect"')
   || !client.includes('label: () => t("\\u8FDE\\u63A5\\u4E2D\\u5FC3")')
   || !client.includes('locale: IM_LOCALE_NAMESPACE')
   || !client.includes('IM_LOCALE_NAMESPACE = "dsh-im"')) {
-  throw new Error('client bundle does not register the localized connection-center tab');
+  throw new Error('client bundle does not register the localized connection-center section');
 }
 for (const marker of [
   'feishu-personal',
   '\\u98DE\\u4E66\\u4E2A\\u4EBA\\u8D26\\u53F7',
-  '\\u6D88\\u606F\\u901A\\u9053',
-  '\\u670D\\u52A1\\u8FDE\\u63A5',
+  'IM\\u673A\\u5668\\u4EBA',
+  '\\u5E94\\u7528\\u6388\\u6743',
 ]) {
   if (!client.includes(marker)) {
     throw new Error(`client bundle is missing connection-center marker ${marker}`);
   }
 }
-if ((client.match(/ctx\.slots\.inject\("settings\.plugins\.tab"/g) ?? []).length !== 1) {
-  throw new Error('client bundle must register exactly one settings tab');
+if ((client.match(/ctx\.slots\.inject\("settings\.section"/g) ?? []).length !== 1
+  || client.includes('ctx.slots.inject("settings.plugins.tab"')) {
+  throw new Error('client bundle must register exactly one top-level settings section');
 }
 if (/role:\s*["']switch|type:\s*["']checkbox/.test(client)) {
   throw new Error('client bundle contains a channel enable switch');

@@ -6,7 +6,7 @@ import { isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const PACKAGE_NAME = '@tokens/dsh-connect';
-const DEFAULT_SOURCE = 'github:sobermh/tokens_DshIm_code';
+const DEFAULT_SOURCE = 'github:sobermh/tokens_DshConnect_code';
 const LEGACY_PACKAGES = [
   '@tokens/dsh-im',
   '@tokens/dsh-feishu-connect',
@@ -22,7 +22,7 @@ function usage() {
   dsh-connect uninstall [--profile web]
 
 Examples:
-  npx -y github:sobermh/tokens_DshIm_code install
+  npx -y github:sobermh/tokens_DshConnect_code install
   dsh-connect install --source .`);
 }
 

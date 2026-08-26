@@ -109,6 +109,7 @@ export class MultiBotDshFeishuController {
   #registerApp;
   #verifyApp;
   #credentials;
+  #applicationService;
   #configStore;
   #createRuntime;
   #deleteState;
@@ -124,18 +125,21 @@ export class MultiBotDshFeishuController {
   #botTransitions = new Map();
   #revision = 1;
   #callbackProbeTimeoutMs;
+  #sharedUserScopes;
   #closed = false;
 
   constructor({
     registerApp,
     verifyApp,
     credentials,
+    applicationService,
     configStore,
     createRuntime,
     deleteState = async () => {},
     createBotId = makeBotId,
     createRegistrationId = makeRegistrationId,
     callbackProbeTimeoutMs = DEFAULT_CALLBACK_PROBE_TIMEOUT_MS,
+    sharedUserScopes = [],
   }) {
     if (typeof registerApp !== 'function') throw new Error('registerApp is required');
     if (typeof verifyApp !== 'function') throw new Error('verifyApp is required');
@@ -153,12 +157,27 @@ export class MultiBotDshFeishuController {
     this.#registerApp = registerApp;
     this.#verifyApp = verifyApp;
     this.#credentials = credentials;
+    if (applicationService
+      && (typeof applicationService.listPublic !== 'function'
+        || typeof applicationService.getPublic !== 'function'
+        || typeof applicationService.resolveCredentials !== 'function'
+        || typeof applicationService.storeApplication !== 'function'
+        || typeof applicationService.attachBot !== 'function'
+        || typeof applicationService.detachBot !== 'function')) {
+      throw new TypeError('Invalid Feishu application service');
+    }
+    if (!Array.isArray(sharedUserScopes)
+      || sharedUserScopes.some((scope) => typeof scope !== 'string' || !scope.trim())) {
+      throw new TypeError('sharedUserScopes must be an array of non-empty strings');
+    }
+    this.#applicationService = applicationService;
     this.#configStore = configStore;
     this.#createRuntime = createRuntime;
     this.#deleteState = deleteState;
     this.#createBotId = createBotId;
     this.#createRegistrationId = createRegistrationId;
     this.#callbackProbeTimeoutMs = callbackProbeTimeoutMs;
+    this.#sharedUserScopes = Object.freeze([...new Set(sharedUserScopes.map((scope) => scope.trim()))]);
   }
 
   async initialize() {
@@ -234,7 +253,10 @@ export class MultiBotDshFeishuController {
       },
       addons: {
         preset: false,
-        scopes: { tenant: [...REQUIRED_TENANT_SCOPES] },
+        scopes: {
+          tenant: [...REQUIRED_TENANT_SCOPES],
+          ...(this.#sharedUserScopes.length > 0 ? { user: [...this.#sharedUserScopes] } : {}),
+        },
         events: { items: { tenant: ['im.message.receive_v1'] } },
         callbacks: { items: ['card.action.trigger'] },
       },
@@ -430,8 +452,23 @@ export class MultiBotDshFeishuController {
         || (!existing && this.#configStore.getBot(botId))) {
         throw new Error('Bot id generator returned an invalid or duplicate id');
       }
-      const secretRef = existing?.secretRef ?? secretRefFor(botId);
-      const previousSecret = await this.#credentials.resolve(secretRef).catch(() => undefined);
+      const storedApplication = this.#applicationService
+        ? await this.#applicationService.storeApplication({
+            appId: normalizedAppId,
+            appSecret: normalizedSecret,
+            domain: normalizedDomain,
+            name: bot.name,
+            preferredSecretRef: existing?.secretRef,
+          })
+        : null;
+      const secretRef = storedApplication
+        ? (await this.#applicationService.resolveCredentials(
+            storedApplication.applicationId,
+          )).secretRef
+        : (existing?.secretRef ?? secretRefFor(botId));
+      const previousSecret = this.#applicationService
+        ? undefined
+        : await this.#credentials.resolve(secretRef).catch(() => undefined);
       const config = {
         ...existing,
         id: botId,
@@ -449,13 +486,16 @@ export class MultiBotDshFeishuController {
         createdAt: existing?.createdAt ?? new Date().toISOString(),
       };
 
-      await this.#credentials.set(secretRef, normalizedSecret);
+      if (!this.#applicationService) await this.#credentials.set(secretRef, normalizedSecret);
       let saved;
       try {
         saved = await this.#configStore.saveBot(config);
       } catch (error) {
-        await this.#restoreCredential(secretRef, previousSecret);
+        if (!this.#applicationService) await this.#restoreCredential(secretRef, previousSecret);
         throw error;
+      }
+      if (storedApplication) {
+        await this.#applicationService.attachBot(storedApplication.applicationId, botId);
       }
 
       await this.#withBotTransition(botId, async () => {
@@ -466,6 +506,69 @@ export class MultiBotDshFeishuController {
           this.#botErrors.set(botId, {
             code: 'connection_failed',
             message: '机器人已经绑定，但长连接未就绪，请点击重试。',
+          });
+        }
+      });
+      this.#touch();
+      return this.status(botId);
+    });
+  }
+
+  async bindSharedApplication(applicationId) {
+    this.#assertOpen();
+    if (!this.#applicationService) throw new Error('Shared Feishu applications are unavailable');
+    return this.#serializeConfig(async () => {
+      this.#assertOpen();
+      const application = this.#applicationService.getPublic(applicationId);
+      if (!application) throw new Error('Unknown Feishu application');
+      const existing = this.#configStore.list().find(
+        (candidate) => application.botIds.includes(candidate.id),
+      );
+      if (existing) return this.status(existing.id);
+      if (application.botIds.length > 0) {
+        throw new Error('The Feishu application is already attached to a bot');
+      }
+      const credentials = await this.#applicationService.resolveCredentials(applicationId);
+      const bot = await this.#verifyApp({
+        appId: credentials.appId,
+        appSecret: credentials.appSecret,
+        domain: credentials.domain,
+      });
+      const appCollision = this.#configStore.list().find(
+        (candidate) => candidate.appId === credentials.appId,
+      );
+      if (appCollision) {
+        await this.#applicationService.attachBot(applicationId, appCollision.id);
+        return this.status(appCollision.id);
+      }
+      const botId = this.#createBotId();
+      if (typeof botId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(botId)
+        || this.#configStore.getBot(botId)) {
+        throw new Error('Bot id generator returned an invalid or duplicate id');
+      }
+      const now = new Date().toISOString();
+      const saved = await this.#configStore.saveBot({
+        id: botId,
+        appId: credentials.appId,
+        secretRef: credentials.secretRef,
+        ownerOpenIds: [ALL_VISIBLE_SENDERS],
+        domain: credentials.domain,
+        botName: bot.name,
+        botOpenId: bot.openId,
+        activated: bot.activated,
+        deletionPending: false,
+        connectedAt: now,
+        createdAt: now,
+      });
+      await this.#applicationService.attachBot(applicationId, botId);
+      await this.#withBotTransition(botId, async () => {
+        try {
+          await this.#startRuntime(saved, credentials.appSecret);
+          this.#botErrors.delete(botId);
+        } catch {
+          this.#botErrors.set(botId, {
+            code: 'connection_failed',
+            message: '机器人已经接入，但长连接未就绪，请点击重试。',
           });
         }
       });
@@ -665,6 +768,7 @@ export class MultiBotDshFeishuController {
         connected: bots.filter((bot) => bot.connected).length,
       },
       anyConnected: aggregateConnected,
+      applications: this.#applicationService?.listPublic() ?? [],
     };
   }
 
@@ -1046,10 +1150,25 @@ export class MultiBotDshFeishuController {
       || (!existing && this.#configStore.getBot(botId))) {
       throw new Error('Bot id generator returned an invalid or duplicate id');
     }
-    const secretRef = existing?.secretRef ?? secretRefFor(botId);
+    const storedApplication = this.#applicationService
+      ? await this.#applicationService.storeApplication({
+          appId,
+          appSecret,
+          domain,
+          name: bot.name,
+          preferredSecretRef: existing?.secretRef,
+        })
+      : null;
+    const secretRef = storedApplication
+      ? (await this.#applicationService.resolveCredentials(
+          storedApplication.applicationId,
+        )).secretRef
+      : (existing?.secretRef ?? secretRefFor(botId));
     const previousOwnership = this.#botOwnership.get(botId);
-    const previousSecret = await this.#credentials.resolve(secretRef).catch(() => undefined);
-    await this.#credentials.set(secretRef, appSecret);
+    const previousSecret = this.#applicationService
+      ? undefined
+      : await this.#credentials.resolve(secretRef).catch(() => undefined);
+    if (!this.#applicationService) await this.#credentials.set(secretRef, appSecret);
     let config;
     try {
       config = await this.#configStore.saveBot({
@@ -1069,9 +1188,14 @@ export class MultiBotDshFeishuController {
       record.botId = botId;
       record.createdNew = !existing;
       this.#botOwnership.set(botId, record.id);
+      if (storedApplication) {
+        await this.#applicationService.attachBot(storedApplication.applicationId, botId);
+      }
     } catch (error) {
       try {
-        await this.#restoreCredential(secretRef, previousSecret);
+        if (!this.#applicationService) {
+          await this.#restoreCredential(secretRef, previousSecret);
+        }
       } catch (restoreError) {
         throw new Error('Unable to restore the Feishu credential after a config failure.', {
           cause: restoreError,
@@ -1085,7 +1209,9 @@ export class MultiBotDshFeishuController {
         await this.#withBotTransition(botId, () => this.#deleteBot(botId));
       } else {
         await this.#configStore.saveBot(existing);
-        await this.#restoreCredential(secretRef, previousSecret);
+        if (!this.#applicationService) {
+          await this.#restoreCredential(secretRef, previousSecret);
+        }
         if (previousOwnership) this.#botOwnership.set(botId, previousOwnership);
         else this.#botOwnership.delete(botId);
       }
@@ -1099,7 +1225,9 @@ export class MultiBotDshFeishuController {
           await this.#withBotTransition(botId, () => this.#deleteBot(botId));
         } else {
           await this.#configStore.saveBot(existing);
-          await this.#restoreCredential(secretRef, previousSecret);
+          if (!this.#applicationService) {
+            await this.#restoreCredential(secretRef, previousSecret);
+          }
           if (previousOwnership) this.#botOwnership.set(botId, previousOwnership);
           else this.#botOwnership.delete(botId);
           if (previousSecret?.value && !existing.deletionPending) {
@@ -1119,7 +1247,9 @@ export class MultiBotDshFeishuController {
           await this.#withBotTransition(botId, () => this.#deleteBot(botId));
         } else if (!cancellationRolledBack && existing) {
           await this.#configStore.saveBot(existing);
-          await this.#restoreCredential(secretRef, previousSecret);
+          if (!this.#applicationService) {
+            await this.#restoreCredential(secretRef, previousSecret);
+          }
           if (previousOwnership) this.#botOwnership.set(botId, previousOwnership);
           else this.#botOwnership.delete(botId);
           if (!this.#closed && previousSecret?.value && !existing.deletionPending) {
@@ -1134,7 +1264,9 @@ export class MultiBotDshFeishuController {
       if (existing && previousSecret?.value) {
         try {
           await this.#configStore.saveBot(existing);
-          await this.#restoreCredential(secretRef, previousSecret);
+          if (!this.#applicationService) {
+            await this.#restoreCredential(secretRef, previousSecret);
+          }
           if (previousOwnership) this.#botOwnership.set(botId, previousOwnership);
           else this.#botOwnership.delete(botId);
           if (!existing.deletionPending) {
@@ -1222,14 +1354,16 @@ export class MultiBotDshFeishuController {
       config = await this.#configStore.saveBot({ ...config, deletionPending: true });
     }
     await this.#stopRuntime(botId);
-    try {
-      await this.#credentials.unset(config.secretRef);
-    } catch (error) {
-      this.#botErrors.set(botId, {
-        code: 'credential_removal_failed',
-        message: '无法删除机器人凭据，请稍后重试。',
-      });
-      throw new Error('Unable to remove the Feishu credential.', { cause: error });
+    if (!this.#applicationService) {
+      try {
+        await this.#credentials.unset(config.secretRef);
+      } catch (error) {
+        this.#botErrors.set(botId, {
+          code: 'credential_removal_failed',
+          message: '无法删除机器人凭据，请稍后重试。',
+        });
+        throw new Error('Unable to remove the Feishu credential.', { cause: error });
+      }
     }
     try {
       await this.#deleteState({ botId, config });
@@ -1241,6 +1375,7 @@ export class MultiBotDshFeishuController {
       throw new Error('Unable to remove the Feishu bot session state.', { cause: error });
     }
     await this.#configStore.removeBot(botId);
+    if (this.#applicationService) await this.#applicationService.detachBot(botId);
     this.#botErrors.delete(botId);
     this.#botOwnership.delete(botId);
   }

@@ -23,17 +23,44 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { beginRegistration, pollRegistration } from "./register.js";
 import { TENANT_SCOPES, USER_SCOPES } from "./scopes.js";
 import { createLarkcli } from "./larkcli.js";
-import { readIdentity, writeIdentity } from "./identity.js";
-import { ensureSkills } from "./skills-provision.js";
+import { clearIdentity, readIdentity, writeIdentity } from "./identity.js";
+import { ensureSkills, inspectSkills } from "./skills-provision.js";
+import { buildCapabilityStatus } from "./capabilities.js";
+import { selectPersonalApplication } from "./application-selection.js";
+import {
+    inferAuthorizedApplication,
+    shouldReconcileAuthorizedFlow,
+    shouldSuppressAuthorizedReconcile,
+} from "./authorization-state.js";
 export const name = 'feishu';
 export const inject = ['tools', 'credentials'];
-export function apply(ctx, config) {
+export async function apply(ctx, config, internals = {}) {
+    const beginRegistrationImpl = internals.beginRegistration ?? beginRegistration;
+    const pollRegistrationImpl = internals.pollRegistration ?? pollRegistration;
+    const ensureSkillsImpl = internals.ensureSkills ?? ensureSkills;
+    const inspectSkillsImpl = internals.inspectSkills ?? inspectSkills;
+    const readIdentityImpl = internals.readIdentity ?? readIdentity;
+    const writeIdentityImpl = internals.writeIdentity ?? writeIdentity;
+    const clearIdentityImpl = internals.clearIdentity ?? clearIdentity;
     const appIdRef = credentialRef(config.appIdEnv);
     const appSecretRef = credentialRef(config.appSecretEnv);
-    const lark = createLarkcli({ profile: config.profile, baseURL: config.baseURL });
+    const applicationService = config.applicationService;
+    if (applicationService) {
+        await applicationService.importLegacyPersonal({
+            appIdRef: config.appIdEnv,
+            appSecretRef: config.appSecretEnv,
+            domain: config.baseURL?.includes('larksuite') ? 'lark' : 'feishu',
+            name: config.appName,
+        });
+    }
+    const lark = (internals.createLarkcli ?? createLarkcli)({
+        profile: config.profile,
+        baseURL: config.baseURL,
+    });
     // ---- connection-flow state machine (one flow at a time) -----------------
     const state = { phase: 'idle' };
     let flowAbort;
+    let suppressAuthorizedReconcile = false;
     const phaseWaiters = new Set();
     // Materialize the official lark-* skills once the binary is present (i.e. on
     // a successful connect). Best-effort and deduped: it must never fail a
@@ -44,7 +71,7 @@ export function apply(ctx, config) {
     function materializeSkillsInBackground() {
         if (skillsInFlight !== undefined)
             return;
-        skillsInFlight = ensureSkills()
+        skillsInFlight = ensureSkillsImpl()
             .then((result) => {
             if (!result.skipped) {
                 ctx.logger.info('materialized %d lark skills (%s) into %s', result.count, result.version, result.root);
@@ -60,8 +87,12 @@ export function apply(ctx, config) {
         state.qrUrl = next.qrUrl;
         state.authorizeUrl = next.authorizeUrl;
         state.message = next.message;
+        if (Object.hasOwn(next, 'applicationId'))
+            state.applicationId = next.applicationId;
         if (next.openId !== undefined)
             state.openId = next.openId;
+        if (next.phase === 'connected' || next.phase === 'error' || next.phase === 'idle')
+            suppressAuthorizedReconcile = false;
         if (next.phase === 'connected')
             materializeSkillsInBackground();
         for (const wake of phaseWaiters)
@@ -83,7 +114,7 @@ export function apply(ctx, config) {
     async function connectedMessage(status) {
         let name = status.userName;
         if (name === undefined)
-            name = (await readIdentity(config.profile))?.userName;
+            name = (await readIdentityImpl(config.profile))?.userName;
         return name === undefined
             ? 'Feishu is connected with your personal identity.'
             : `Feishu is connected as ${name}.`;
@@ -99,65 +130,55 @@ export function apply(ctx, config) {
             record.userName = status.userName;
         if (status.openId !== undefined)
             record.openId = status.openId;
-        await writeIdentity(record).catch(() => { });
+        await writeIdentityImpl(record).catch(() => { });
     }
-    /**
-     * Re-bind the lark-cli profile from the app credentials already saved in the
-     * DSH credential store. Used when the app is known (its id/secret are stored)
-     * but the local lark-cli profile config was lost — e.g. `~/.lark-cli` was
-     * wiped — so we reuse the existing app instead of minting a new one and
-     * orphaning it. Returns `false` when the stored credentials are incomplete,
-     * so the caller falls back to a full registration.
-     */
-    async function rebindStoredApp(domain, signal) {
+    async function legacyStoredCredentials(domain) {
         const id = await ctx.credentials.resolve(appIdRef);
         const secret = await ctx.credentials.resolve(appSecretRef);
-        if (id === undefined || secret === undefined)
+        if (!id?.value || !secret?.value)
+            return undefined;
+        return { appId: id.value, appSecret: secret.value, domain };
+    }
+    function selectApplication(applicationId, createNew) {
+        if (!applicationService || createNew)
+            return undefined;
+        const applications = applicationService.listPublic();
+        return selectPersonalApplication({
+            applications,
+            selectedApplication: applicationService.getPersonalApplication(),
+            applicationId,
+            createNew,
+        });
+    }
+    async function authorizeApplication(application, domain, signal) {
+        const credentials = applicationService
+            ? await applicationService.resolveCredentials(application.applicationId)
+            : await legacyStoredCredentials(domain);
+        if (!credentials)
             return false;
         await lark.provision();
-        await lark.configInit(id.value, secret.value, domain, signal);
-        return true;
-    }
-    /**
-     * Authorize against an app whose lark-cli profile config already persists
-     * (created in an earlier run), so the user only opens the single device-code
-     * link. When `loginBegin` fails because the profile config is missing (e.g.
-     * `~/.lark-cli` was wiped) the stored app credentials are used to re-bind the
-     * profile and the login is retried — reusing the same app rather than minting
-     * a new one. Returns `false` — without surfacing an error — only when the app
-     * cannot be reused at all (no stored credentials to re-bind), so the caller
-     * falls back to a full registration. A genuine authorization failure throws.
-     */
-    async function authorizeReusingApp(domain, signal) {
-        await lark.provision();
-        let begin;
-        try {
-            begin = await lark.loginBegin(signal);
-        }
-        catch {
-            // Profile config missing/corrupt: re-bind from stored creds, then retry.
-            if (!(await rebindStoredApp(domain, signal)))
-                return false;
-            try {
-                begin = await lark.loginBegin(signal);
-            }
-            catch {
-                return false;
-            }
-        }
+        await lark.configInit(credentials.appId, credentials.appSecret, credentials.domain, signal);
+        const begin = await lark.loginBegin(signal);
         setState({
             phase: 'authorizing',
+            applicationId: application?.applicationId ?? null,
             authorizeUrl: begin.verificationUrl,
             message: 'Open this link and confirm to grant your personal Feishu identity.',
         });
         const status = await lark.loginComplete(begin.deviceCode, signal);
+        if (applicationService && application)
+            await applicationService.selectPersonal(application.applicationId);
         await recordIdentity(status);
-        setState({ phase: 'connected', message: await connectedMessage(status) });
+        setState({
+            phase: 'connected',
+            applicationId: application?.applicationId ?? null,
+            message: await connectedMessage(status),
+        });
         return true;
     }
     /** Full one-click flow: register a brand-new app, bind it, then authorize. */
     async function registerAndAuthorize(domain, signal) {
-        const session = await beginRegistration({
+        const session = await beginRegistrationImpl({
             domain,
             appName: config.appName,
             appDesc: config.appDesc,
@@ -174,7 +195,7 @@ export function apply(ctx, config) {
         let appId, appSecret, appDomain;
         for (;;) {
             await sleep(session.intervalSec * 1000, signal);
-            const outcome = await pollRegistration(session, signal);
+            const outcome = await pollRegistrationImpl(session, signal);
             if (outcome.status === 'pending')
                 continue;
             if (outcome.status !== 'success') {
@@ -192,8 +213,18 @@ export function apply(ctx, config) {
             });
             break;
         }
-        await ctx.credentials.set(appIdRef, appId);
-        await ctx.credentials.set(appSecretRef, appSecret);
+        const application = applicationService
+            ? await applicationService.storeApplication({
+                appId,
+                appSecret,
+                domain: appDomain,
+                name: config.appName,
+            })
+            : undefined;
+        if (!applicationService) {
+            await ctx.credentials.set(appIdRef, appId);
+            await ctx.credentials.set(appSecretRef, appSecret);
+        }
         // Provision the pinned lark-cli binary (first run downloads ~12 MB) and
         // bind the created app's credentials to the profile.
         await lark.provision();
@@ -203,12 +234,19 @@ export function apply(ctx, config) {
         const begin = await lark.loginBegin(signal);
         setState({
             phase: 'authorizing',
+            applicationId: application?.applicationId ?? null,
             authorizeUrl: begin.verificationUrl,
             message: 'App created. Open this link and confirm to grant your personal Feishu identity.',
         });
         const status = await lark.loginComplete(begin.deviceCode, signal);
+        if (applicationService && application)
+            await applicationService.selectPersonal(application.applicationId);
         await recordIdentity(status);
-        setState({ phase: 'connected', message: await connectedMessage(status) });
+        setState({
+            phase: 'connected',
+            applicationId: application?.applicationId ?? null,
+            message: await connectedMessage(status),
+        });
     }
     /**
      * Drive the connection idempotently. Without `force`: an existing valid
@@ -218,28 +256,51 @@ export function apply(ctx, config) {
      * authorization is re-run (reusing the app) so a different identity can sign
      * in.
      */
-    async function runConnectFlow(domain, force, signal) {
+    async function runConnectFlow(domain, force, applicationId, createNew, signal) {
+        const selectedBefore = applicationService?.getPersonalApplication();
+        const target = selectApplication(applicationId, createNew);
         const current = await lark.status(signal).catch(() => undefined);
-        if (!force && current?.connected === true) {
+        const switchingApplication = Boolean(applicationService
+            && target
+            && selectedBefore?.applicationId !== target.applicationId);
+        if (!force && !switchingApplication && !createNew && current?.connected === true) {
             await recordIdentity(current);
-            setState({ phase: 'connected', message: await connectedMessage(current) });
+            setState({
+                phase: 'connected',
+                applicationId: selectedBefore?.applicationId ?? target?.applicationId ?? null,
+                message: await connectedMessage(current),
+            });
             return;
         }
-        // Forced switch: drop the existing user session but keep the app.
-        if (force && current !== undefined)
+        if ((force || switchingApplication || createNew) && current !== undefined)
             await lark.logout(signal);
-        // Reuse an already-created app when possible; only register when we must.
-        const appConfigured = (await ctx.credentials.describe(appIdRef)).configured;
-        if (appConfigured && await authorizeReusingApp(domain, signal))
+        suppressAuthorizedReconcile = false;
+        if (target && await authorizeApplication(target, domain, signal))
             return;
+        if (!applicationService) {
+            const appConfigured = (await ctx.credentials.describe(appIdRef)).configured;
+            if (appConfigured && await authorizeApplication(undefined, domain, signal))
+                return;
+        }
         await registerAndAuthorize(domain, signal);
     }
-    function startConnect(domain, force) {
+    function startConnect(domain, force, { applicationId, createNew = false } = {}) {
         flowAbort?.abort();
         const controller = new AbortController();
         flowAbort = controller;
-        setState({ phase: 'creating', message: 'Checking existing Feishu connection…' });
-        runConnectFlow(domain, force, controller.signal).catch((error) => {
+        suppressAuthorizedReconcile = shouldSuppressAuthorizedReconcile({
+            force,
+            createNew,
+            applicationId,
+            applications: applicationService?.listPublic() ?? [],
+            selectedApplication: applicationService?.getPersonalApplication(),
+        });
+        setState({
+            phase: 'creating',
+            applicationId: applicationId ?? null,
+            message: 'Checking existing Feishu connection…',
+        });
+        runConnectFlow(domain, force, applicationId, createNew, controller.signal).catch((error) => {
             if (controller.signal.aborted)
                 return;
             setState({ phase: 'error', message: error instanceof Error ? error.message : String(error) });
@@ -251,39 +312,118 @@ export function apply(ctx, config) {
             qrUrl: state.qrUrl ?? null,
             authorizeUrl: state.authorizeUrl ?? null,
             message: state.message ?? null,
+            applicationId: state.applicationId ?? null,
         };
     }
-    async function describeConfigured() {
-        const app = await ctx.credentials.describe(appIdRef);
+    async function describeConfigured(verify = false) {
+        const applications = applicationService?.listPublic() ?? [];
+        const selectedApplication = applicationService?.getPersonalApplication() ?? null;
+        const app = applicationService ? null : await ctx.credentials.describe(appIdRef);
+        let liveUserStatus;
         let userAuthorized = false;
         try {
-            const status = await lark.status();
-            userAuthorized = status?.connected ?? false;
+            liveUserStatus = await lark.status(undefined, { verify });
+            userAuthorized = liveUserStatus?.connected ?? false;
         }
         catch { /* lark-cli not ready yet → not authorized */ }
-        return { appConfigured: app.configured, userAuthorized };
+        return {
+            appConfigured: applicationService ? selectedApplication !== null : app.configured,
+            userAuthorized,
+            applications,
+            selectedApplication,
+            selectedApplicationId: selectedApplication?.applicationId ?? null,
+            selectionRequired: selectedApplication === null && applications.length > 1,
+            sharedWithBot: (selectedApplication?.botCount ?? 0) > 0,
+            liveUserStatus,
+        };
     }
     /**
      * Merge live flow state with configured/authorized truth. After a restart the
      * in-memory phase is `idle` but lark-cli may still hold a valid session, so
      * normalize that to `connected` for an honest snapshot.
      */
-    async function fullStatus() {
-        const configured = await describeConfigured();
-        const snapshot = statusSnapshot();
-        const phase = snapshot.phase === 'idle' && configured.userAuthorized ? 'connected' : snapshot.phase;
-        return { ...snapshot, phase, ...configured };
+    async function fullStatus(includeApplications = false, verify = false) {
+        const configured = await describeConfigured(verify);
+        let snapshot = statusSnapshot();
+        if (configured.userAuthorized && applicationService && configured.selectedApplication === null) {
+            const liveApplication = configured.liveUserStatus?.appId === undefined
+                || typeof applicationService.findPublicByAppId !== 'function'
+                ? null
+                : applicationService.findPublicByAppId(configured.liveUserStatus.appId);
+            const flowApplication = snapshot.applicationId === null
+                ? null
+                : applicationService.getPublic(snapshot.applicationId);
+            const inferredApplication = inferAuthorizedApplication({
+                liveApplication,
+                flowApplication,
+                applications: configured.applications,
+            });
+            if (inferredApplication !== null) {
+                configured.selectedApplication = await applicationService.selectPersonal(
+                    inferredApplication.applicationId,
+                );
+                configured.applications = applicationService.listPublic();
+                configured.selectedApplicationId = configured.selectedApplication.applicationId;
+                configured.appConfigured = true;
+                configured.selectionRequired = false;
+                configured.sharedWithBot = configured.selectedApplication.botCount > 0;
+            }
+        }
+        const {
+            applications,
+            selectedApplication,
+            liveUserStatus,
+            ...publicConfigured
+        } = configured;
+        if (shouldReconcileAuthorizedFlow({
+            userAuthorized: configured.userAuthorized,
+            suppressAuthorizedReconcile,
+            phase: snapshot.phase,
+        })) {
+            flowAbort?.abort();
+            flowAbort = undefined;
+            await recordIdentity(liveUserStatus ?? { connected: true });
+            setState({
+                phase: 'connected',
+                applicationId: selectedApplication?.applicationId ?? snapshot.applicationId ?? null,
+                message: await connectedMessage(liveUserStatus ?? { connected: true }),
+            });
+            snapshot = statusSnapshot();
+        }
+        return {
+            ...snapshot,
+            ...publicConfigured,
+            ...(includeApplications ? { applications, selectedApplication, liveUserStatus } : {}),
+        };
     }
     /** Browser-only status metadata. No credential or token value crosses RPC. */
     async function settingsStatus() {
-        const status = await fullStatus();
-        const identity = await readIdentity(config.profile);
+        const status = await fullStatus(true, true);
+        const { liveUserStatus, ...publicStatus } = status;
+        const identity = await readIdentityImpl(config.profile);
+        const skills = await inspectSkillsImpl().catch(() => ({ available: false, count: 0, names: [] }));
+        const capabilityStatus = buildCapabilityStatus(liveUserStatus, skills);
         return {
-            ...status,
-            appName: config.appName,
+            ...publicStatus,
+            ...capabilityStatus,
+            appName: publicStatus.selectedApplication?.name ?? config.appName,
             profile: config.profile,
             userName: identity?.userName ?? null,
         };
+    }
+    async function disconnectPersonal() {
+        flowAbort?.abort();
+        flowAbort = undefined;
+        await lark.logout();
+        await clearIdentityImpl(config.profile).catch(() => { });
+        if (applicationService)
+            await applicationService.detachPersonal();
+        setState({
+            phase: 'idle',
+            applicationId: null,
+            message: 'Personal Feishu authorization was removed. The application remains available.',
+        });
+        return settingsStatus();
     }
     /** Fail domain tools early with an actionable message when not connected. */
     async function assertConnected(signal) {
@@ -307,8 +447,12 @@ export function apply(ctx, config) {
             qrUrl: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
             authorizeUrl: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
             message: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
+            applicationId: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
             appConfigured: { type: 'boolean', required: true },
             userAuthorized: { type: 'boolean', required: true },
+            selectedApplicationId: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
+            selectionRequired: { type: 'boolean', required: true },
+            sharedWithBot: { type: 'boolean', required: true },
         },
         additionalProperties: false,
     };
@@ -322,6 +466,8 @@ export function apply(ctx, config) {
         }
         if (value.message !== null)
             lines.push(value.message);
+        if (value.selectionRequired)
+            lines.push('Multiple Feishu applications are available; choose one application_id or create a new application.');
         lines.push(`app configured: ${value.appConfigured}, personal identity authorized: ${value.userAuthorized}`);
         return [{ type: 'text', text: lines.join('\n') }];
     }
@@ -345,13 +491,27 @@ export function apply(ctx, config) {
                 description: 'Re-run personal authorization even if already connected, to switch account '
                     + '(reuses the existing app). Default false: reuse the current connection.',
             },
+            application_id: {
+                type: 'string',
+                description: 'Existing shared Feishu application id. Required only when more than one application exists.',
+            },
+            create_new_application: {
+                type: 'boolean',
+                description: 'Create an independent Feishu application instead of reusing an existing one.',
+            },
         },
         output: {
             schema: statusOutput,
             render: (_args, value) => renderStatus(value),
         },
         async execute(args) {
-            startConnect(args.domain ?? 'feishu', args.force ?? false);
+            if (args.application_id !== undefined && args.create_new_application === true) {
+                throw new Error('application_id and create_new_application cannot be used together');
+            }
+            startConnect(args.domain ?? 'feishu', args.force ?? false, {
+                applicationId: args.application_id,
+                createNew: args.create_new_application ?? false,
+            });
             // Wait until the flow leaves the initial check: a link appears, it
             // short-circuits to connected, or it fails.
             for (let i = 0; i < 100 && state.phase === 'creating' && state.qrUrl === undefined; i++) {
@@ -532,7 +692,7 @@ export function apply(ctx, config) {
                 + '(version-matched). Normally automatic on connect; use this to force an update.',
             async handler() {
                 try {
-                    const result = await ensureSkills(true);
+                    const result = await ensureSkillsImpl(true);
                     return {
                         kind: 'success',
                         text: `Materialized ${result.count} lark skills (${result.version}) into ${result.root}.`,
@@ -562,16 +722,33 @@ export function apply(ctx, config) {
                 const keys = Object.keys(input);
                 const domain = input.domain;
                 const force = input.force;
-                if (keys.some((key) => key !== 'domain' && key !== 'force')
+                const applicationId = input.applicationId;
+                const createNew = input.createNew;
+                if (keys.some((key) => !['domain', 'force', 'applicationId', 'createNew'].includes(key))
                     || (domain !== 'feishu' && domain !== 'lark')
-                    || typeof force !== 'boolean') {
+                    || typeof force !== 'boolean'
+                    || (applicationId !== undefined
+                        && (typeof applicationId !== 'string'
+                            || !/^[A-Za-z0-9_-]{1,128}$/.test(applicationId)))
+                    || (createNew !== undefined && typeof createNew !== 'boolean')
+                    || (applicationId !== undefined && createNew === true)) {
                     return {
                         ok: false,
                         error: { code: 'bad-request', message: 'invalid Feishu connect request', details: { issues: [] } },
                     };
                 }
-                startConnect(domain, force);
+                startConnect(domain, force, { applicationId, createNew: createNew ?? false });
                 return { ok: true, value: await settingsStatus() };
+            }
+            if (endpoint === 'feishu/disconnect') {
+                if (payload === null || typeof payload !== 'object' || Array.isArray(payload)
+                    || Object.keys(payload).length !== 1 || payload.confirm !== true) {
+                    return {
+                        ok: false,
+                        error: { code: 'bad-request', message: 'invalid Feishu disconnect request', details: { issues: [] } },
+                    };
+                }
+                return { ok: true, value: await disconnectPersonal() };
             }
             return {
                 ok: false,

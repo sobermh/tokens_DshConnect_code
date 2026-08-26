@@ -490,6 +490,42 @@ const CSS = String.raw`
 .bxf-confirm p { color: var(--dsw-alias-label-secondary, #646a73); font-size: 12px; line-height: 19px; margin: 4px 0 0; }
 .bxf-confirm .bxf-actions { margin-top: 12px; }
 
+.bxf-sharedApplication {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(280px, 1.35fr);
+  align-items: center;
+  gap: 18px;
+  padding: 13px 0 16px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3);
+}
+.bxf-sharedApplicationCopy { min-width: 0; display: grid; }
+.bxf-sharedApplicationCopy strong { font-size: 12px; line-height: 18px; font-weight: 650; }
+.bxf-sharedApplicationCopy small { color: var(--dsw-alias-label-secondary, #646a73); font-size: 10px; line-height: 16px; }
+.bxf-sharedApplicationControl { min-width: 0; display: flex; justify-content: flex-end; gap: 8px; }
+.bxf-sharedApplicationControl select {
+  min-width: 0;
+  flex: 1;
+  height: 34px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2, #dee0e3);
+  border-radius: 7px;
+  color: var(--dsw-alias-label-primary, #1f2329);
+  background: var(--dsw-alias-bg-layer-1, #fff);
+  font-size: 11px;
+}
+.bxf-sharedApplicationError { grid-column: 1 / -1; color: var(--bxf-error); font-size: 11px; line-height: 17px; }
+
+.dim-panel .bxf-headingTools .dim-scanButton.bxf-newApplicationButton[data-kind="secondary"] {
+  border-color: var(--dsw-alias-border-l2, #c9cdd4);
+  color: var(--dsw-alias-label-primary, #1f2329);
+  background: var(--dsw-alias-bg-layer-1, #fff);
+  box-shadow: 0 1px 2px rgb(31 35 41 / 5%);
+}
+.dim-panel .bxf-headingTools .dim-scanButton.bxf-newApplicationButton[data-kind="secondary"]:hover:not(:disabled) {
+  border-color: #86909c;
+  background: var(--dsw-alias-interactive-bg-hover, #f7f8fa);
+}
+
 .bxf-error { min-height: 252px; display: grid; grid-template-columns: 44px minmax(0, 1fr); align-content: center; gap: 15px; padding: 30px; }
 .bxf-errorIcon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; color: var(--bxf-error); background: color-mix(in srgb, var(--bxf-error) 9%, transparent); }
 .bxf-error h3 { font-size: 17px; line-height: 25px; }
@@ -530,6 +566,8 @@ const CSS = String.raw`
   .bxf-headingTools { gap: 6px; }
   .bxf-headingTools .bxf-totalBadge { padding-inline: 8px; }
   .bxf-headingTools .bxf-bindButton { padding-inline: 10px; }
+  .bxf-sharedApplication { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .bxf-sharedApplicationControl { justify-content: flex-start; }
 }
 
 @media (max-width: 680px) {

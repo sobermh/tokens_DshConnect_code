@@ -9,7 +9,7 @@
   <p><strong>Connecting DeepSeek Harness</strong></p>
 
   <p>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshIm_code" alt="MIT license"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshConnect_code" alt="MIT license"></a>
     <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-5865f2" alt="DeepSeek Harness">
   </p>
 
@@ -30,11 +30,13 @@
 
 ---
 
-> This repository evolves from [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) and is published as `@tokens/dsh-connect`. The original authorship, contribution history, and MIT license are preserved. The current package combines IM, a personal Feishu account, and AI Office in one TokensHarness Connection Center.
+> This repository evolves from [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) and is published as `@tokens/dsh-connect`. The original authorship, contribution history, and MIT license are preserved. The current package combines IM bots and personal Feishu authorization in one TokensHarness Connection Center.
 
 ## Introduction
 
-Connect IM bots to DeepSeek Harness by scanning a QR code, using an App Manifest, or entering existing bot credentials; connect a personal Feishu account through OAuth; and let the local Harness connect outward to a public AI Office. One plugin and one Connection Center entry manage nine multi-bot IM channels, the personal Feishu connection, and the AI Office Connector.
+Connect IM bots to DeepSeek Harness by scanning a QR code, using an App Manifest, or entering existing bot credentials, and authorize one personal Feishu account through OAuth. One plugin and one Connection Center entry separate nine multi-bot IM channels from personal Feishu authorization.
+
+Feishu uses a shared application resource: each App ID and App Secret is stored once, while a bot and personal OAuth may reuse that application or explicitly use separate applications. Bot runtimes, chat sessions, and the personal OAuth Token remain isolated. Removing a bot does not log out the personal account, and removing personal authorization does not stop the bot. Existing configuration is imported by App ID: matching IDs merge and distinct IDs remain independent.
 
 ## Interface
 
@@ -76,30 +78,20 @@ After the model calls the file-return tool, the plugin hands the specified file 
 | Discord | Enable **Message Content Intent** in the Developer Portal. The bot needs **Send Messages**, **Create Public Threads**, **Send Messages in Threads**, and **Read Message History**; result-file delivery also requires **Attach Files**. The current account and server capability determine the actual attachment allowance. |
 | WhatsApp | The linked session must support Document Messages; the WhatsApp/Baileys response determines the actual range. |
 
-## AI Office Connector
-
-The **AI Office** page lets the local Harness connect outward to a public Office. The machine needs no public IP, forwarded port, or WebSocket server. The Device Token is written only to the Harness credential provider; the ordinary config file contains only the device ID, Office origin, workspace aliases, and instruction-preset aliases. Office selects aliases and never receives local absolute paths.
-
-The current protocol is `office-harness.v1`. The connector authenticates and advertises capabilities with `POST /api/harness/connector/heartbeat`, then opens the downstream event plane with `GET /api/harness/connector/stream` over SSE. The settings page derives every fixed hook from the Office Base URL and reconnects with backoff after a disconnect.
-
-A `job.available` event makes the local connector fetch the payload, validate Workspace/Preset aliases, claim a 90-second lease, and renew it every 30 seconds. It creates an isolated Harness Session, reports safe status/tool/text progress, and writes a terminal result exactly once. Tool approvals and follow-up questions surface in Office; approve, reject, and text answers return over SSE to the original Session. Heartbeats and leases recover from dropped connections.
-
-A successful heartbeat response must be JSON: `{"ok":true,"protocolVersion":"office-harness.v1"}`. This makes a successful connection test proof of a compatible Office Connector instead of any URL that happens to return 200.
-
 ## Installation
 
 Install the published stable release from npm (recommended):
 
 ```sh
-dsh plugin --profile web add -w @tokens/dsh-connect@2.4.2
+dsh plugin --profile web add -w @tokens/dsh-connect@2.4.3
 ```
 
-Restart `dsh web`, then open **Settings → Plugins → Connection Center**. For a local desktop test, use the `desktop` profile and replace the package spec with the absolute path to the local `.tgz` when needed.
+Restart `dsh web`, then open **Settings → Connection Center**. For a local desktop test, use the `desktop` profile and replace the package spec with the absolute path to the local `.tgz` when needed.
 
 To try the latest code before it is published to npm, use the GitHub-source installer instead:
 
 ```sh
-npx -y github:sobermh/tokens_DshIm_code install
+npx -y github:sobermh/tokens_DshConnect_code install
 ```
 
 A GitHub-source installation fetches and builds a Git dependency directly. With pnpm 10 or newer, the profile may first need an `allowBuilds` entry in `pnpm-workspace.yaml`. Most users should prefer the stable npm release.
@@ -210,12 +202,13 @@ If the Slack desktop app has no native Slash Command registered with the same na
 
 ## Design
 
-- Registers one **Connection Center** settings page, grouping nine IM channels under Messaging and the personal Feishu account plus AI Office under Service Connections.
-- Maintains the Host, client, and runtime sources for all nine channels, the personal Feishu connection, and the Office Connector in this repository without external standalone plugins.
+- Registers one **Connection Center** settings page with separate **IM bots** and **App authorization** tabs for nine IM channels and one personal Feishu account.
+- Maintains the Host, client, and runtime sources for all nine channels and the personal Feishu connection in this repository without external standalone plugins.
 - Follows the DeepSeek Harness language preference and switches the settings UI live between Chinese and English. Bot chat messages follow the Host's `language` config (Chinese by default; `en` switches them to English), with Chinese always as the fallback so untranslated text is sent verbatim.
-- Reuses the original dsh-im logos and card layout for WeChat, Feishu Bot, DingTalk, WeCom, QQ, Slack, Telegram, Discord, WhatsApp, Personal Feishu, and AI Office.
-- Keeps RPC endpoints, credentials, connection supervision, and session mappings isolated by IM channel. Personal Feishu retains the `dsh-feishu` profile and exposes document, messaging, and Bitable tools; the Office Connector separately owns Device credentials, Job leases, approval waits, and concurrency limits.
-- Returns only QR codes, the public Slack Manifest, redacted status data, and access modes or allowlist identifiers explicitly saved for the current Telegram or WhatsApp bot. Manually entered secrets and Tokens travel one way to the local Host; no RPC response returns App Secrets, `bot_token`, DingTalk `client_secret`, WeCom Secrets, QQ `app_secret`, Slack Bot/App Tokens, Telegram/Discord Bot Tokens, WhatsApp linked-device keys, AI Office Device Tokens, or other raw user identifiers observed from platform messages.
+- Reuses the original dsh-im logos and card layout for WeChat, Feishu Bot, DingTalk, WeCom, QQ, Slack, Telegram, Discord, WhatsApp, and Personal Feishu.
+- Keeps RPC endpoints, credentials, connection supervision, and session mappings isolated by IM channel. Personal Feishu retains the `dsh-feishu` profile and exposes document, messaging, and Bitable tools.
+- Stores non-secret Feishu application metadata and consumer relationships in one registry, with one protected App Secret per application; bot and personal OAuth consumers attach and detach independently.
+- Returns only QR codes, the public Slack Manifest, redacted status data, and access modes or allowlist identifiers explicitly saved for the current Telegram or WhatsApp bot. Manually entered secrets and Tokens travel one way to the local Host; no RPC response returns App Secrets, `bot_token`, DingTalk `client_secret`, WeCom Secrets, QQ `app_secret`, Slack Bot/App Tokens, Telegram/Discord Bot Tokens, WhatsApp linked-device keys, or other raw user identifiers observed from platform messages.
 
 ## Local development
 

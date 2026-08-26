@@ -466,7 +466,7 @@ export class SlackApi {
           'content-type': body === undefined || formEncoded
             ? 'application/x-www-form-urlencoded;charset=utf-8'
             : 'application/json;charset=utf-8',
-          'user-agent': 'DeepSeek-Harness-dsh-im (https://github.com/sobermh/tokens_DshIm_code, 2.3.0)',
+          'user-agent': 'DeepSeek-Harness-dsh-im (https://github.com/sobermh/tokens_DshConnect_code, 2.3.0)',
         },
         ...(body === undefined ? {} : {
           body: formEncoded ? new URLSearchParams(body).toString() : JSON.stringify(body),
