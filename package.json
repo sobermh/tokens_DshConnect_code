@@ -1,6 +1,6 @@
 {
   "name": "@tokens/dsh-connect",
-  "version": "2.4.3",
+  "version": "2.4.4",
   "description": "统一管理九种 IM 机器人与飞书个人账号授权，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",
@@ -95,7 +95,6 @@
     "node": ">=22.19"
   },
   "dependencies": {
-    "@tencent-connect/qqbot-connector": "1.2.0",
     "@tencent-connect/qqbot-nodejs": "1.0.4",
     "@wecom/aibot-node-sdk": "1.0.7",
     "dingtalk-stream": "2.1.4",

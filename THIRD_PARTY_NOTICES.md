@@ -15,7 +15,7 @@ The Host bundle includes [`@larksuiteoapi/node-sdk`](https://github.com/larksuit
 
 This package depends at runtime on [`dingtalk-stream`](https://github.com/open-dingtalk/dingtalk-stream-sdk-nodejs) 2.1.4, [`@wecom/aibot-node-sdk`](https://github.com/WecomTeam/aibot-node-sdk) 1.0.7, [`@tencent-connect/qqbot-nodejs`](https://github.com/tencent-connect/qqbot) 1.0.4, and [`qrcode`](https://github.com/soldair/node-qrcode) 1.5.4. These packages are licensed under the MIT License; `dingtalk-stream` is copyright 2023 钉钉开放平台团队.
 
-QQ QR binding uses Tencent Connect's official [`@tencent-connect/qqbot-connector`](https://www.npmjs.com/package/@tencent-connect/qqbot-connector) 1.2.0 package as an external runtime dependency. Its npm metadata declares `UNLICENSED`; no connector source is copied into this project.
+The QQ channel intentionally uses manual AppID and AppSecret setup. Tencent Connect's `@tencent-connect/qqbot-connector` package declares `UNLICENSED`, so it is not a dependency and is not redistributed by this project.
 
 The WhatsApp channel uses Baileys to implement WhatsApp Web linked-device QR login and messaging. This is an unofficial WhatsApp Web integration; users should use a dedicated bot number and understand that WhatsApp protocol changes can require connector updates.
 

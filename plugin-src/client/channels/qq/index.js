@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { QqLogoGlyph } from '../../channel-logos.js';
-import { CredentialActionIcon, CredentialBindingPanel, QrActionIcon } from '../../credential-binding.js';
+import { CredentialActionIcon, CredentialBindingPanel } from '../../credential-binding.js';
 import { h } from '../../i18n.js';
 import { WorkspaceEditor } from '../../workspace-editor.js';
 import {
@@ -48,26 +48,19 @@ function checkedTime(value) {
   }
 }
 
-function Heading({ totals, adding, busy, onAdd, onCredential, credentialOpen, addButtonRef }) {
+function Heading({ totals, busy, onCredential, credentialOpen, addButtonRef }) {
   return h('div', { className: 'ddt-heading' },
     h('div', { className: 'ddt-tools' },
       h('div', { className: 'dim-bindActions' },
         h(Button, {
           kind: 'primary',
-          className: 'dim-scanButton',
-          onClick: onAdd,
-          disabled: adding || busy,
-          ref: addButtonRef,
-          'aria-label': '扫码接入 QQ 机器人',
-        }, h(QrActionIcon), adding ? '正在接入' : '扫码接入机器人'),
-        h(Button, {
-          kind: 'credential',
           className: 'dim-credentialButton',
           onClick: onCredential,
-          disabled: adding || busy,
+          disabled: busy,
+          ref: addButtonRef,
           'aria-pressed': credentialOpen,
           'aria-label': '使用 AppID 和 AppSecret 绑定 QQ 机器人',
-        }, h(CredentialActionIcon), credentialOpen ? '收起凭据' : '手动接入')),
+        }, h(CredentialActionIcon), credentialOpen ? '收起接入' : '接入机器人')),
       totals.configured > 0
         ? h('div', { className: 'ddt-badge dim-onlineBadge' },
             h('span', null, `${totals.connected} / ${totals.configured} 在线`))
@@ -86,11 +79,11 @@ function EmptyView({ busy, onStart }) {
       h('div', { className: 'dim-emptyCopy' },
         h('div', { className: 'ddt-stateLabel dim-stateLabel' },
           h('span', { className: 'ddt-dot dim-stateDot' }), h('span', null, '尚未绑定 QQ 机器人')),
-        h('h3', null, '使用手机 QQ 扫码创建并绑定机器人'),
-        h('p', null, '扫码由腾讯官方页面完成，不需要手动填写 AppID 或 AppSecret。扫码成功后，机器人会自动连接 DeepSeek Harness。'),
+        h('h3', null, '接入 QQ 机器人'),
+        h('p', null, '在 QQ 开放平台创建机器人后，填写 AppID 和 AppSecret 建立本机 WebSocket 消息连接。'),
         h('div', { className: 'ddt-actions dim-viewActions' },
           h(Button, { kind: 'primary', onClick: onStart, disabled: busy },
-            busy ? '正在生成二维码…' : '生成 QQ 二维码'))),
+            busy ? '正在连接…' : '填写应用凭据'))),
       h('div', { className: 'ddt-brandMark dim-emptyBrand dqq-brand', 'aria-hidden': 'true' },
         h(QqLogoGlyph, { size: 64 }))));
 }
@@ -489,9 +482,7 @@ export function QqSettingsTab({ rpcCall }) {
   }, h('section', { className: 'ddt-page dqq-page dim-channelPage', 'aria-label': 'QQ 设置' },
     h(Heading, {
       totals: model.totals,
-      adding: Boolean(provision),
       busy,
-      onAdd: () => void startProvisioning(),
       onCredential: () => { setCredentialOpen((value) => !value); setCredentialError(null); },
       credentialOpen,
       addButtonRef,
@@ -503,7 +494,10 @@ export function QqSettingsTab({ rpcCall }) {
             credentialView,
             provisionView,
             model.bots.length === 0 && !provision && !credentialOpen
-              ? h(EmptyView, { busy, onStart: () => void startProvisioning() }) : null,
+              ? h(EmptyView, {
+                  busy,
+                  onStart: () => { setCredentialOpen(true); setCredentialError(null); },
+                }) : null,
             botList)));
 }
 

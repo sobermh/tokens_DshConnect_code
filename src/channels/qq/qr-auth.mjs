@@ -1,10 +1,14 @@
-import { startQrConnect } from '@tencent-connect/qqbot-connector';
+function unavailableQrConnect() {
+  const error = new Error('QQ QR provisioning is unavailable; bind the bot with AppID and AppSecret.');
+  error.code = 'qq-qr-unavailable';
+  throw error;
+}
 
 export class QqQrAuth {
   #start;
   #source;
 
-  constructor({ start = startQrConnect, source = 'deepseek-harness' } = {}) {
+  constructor({ start = unavailableQrConnect, source = 'deepseek-harness' } = {}) {
     if (typeof start !== 'function') throw new TypeError('QQ QR connector is required');
     this.#start = start;
     this.#source = source;

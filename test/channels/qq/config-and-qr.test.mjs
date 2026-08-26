@@ -51,3 +51,11 @@ test('QQ QR wrapper disables console output and identifies DeepSeek Harness', ()
     signal,
   });
 });
+
+test('QQ QR wrapper fails closed without the non-redistributable connector', () => {
+  const auth = new QqQrAuth();
+  assert.throws(
+    () => auth.start({ onSuccess() {}, onFailure() {} }),
+    (error) => error?.code === 'qq-qr-unavailable',
+  );
+});

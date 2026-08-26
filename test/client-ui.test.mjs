@@ -520,10 +520,9 @@ test('Feishu prioritizes an existing reusable application over creating another 
   }
 });
 
-test('credential binding is a distinct secondary action beside QR binding in four channels', async () => {
+test('credential binding is a distinct secondary action beside QR binding in three channels', async () => {
   const settings = [
     ['飞书', FeishuSettingsTab],
-    ['QQ', QqSettingsTab],
     ['钉钉', DingtalkSettingsTab],
     ['企业微信', WecomSettingsTab],
   ];

@@ -160,7 +160,6 @@ for (const name of ['@xmanrui/dsh-feishu', '@xmanrui/dsh-weixin', '@xmanrui/dsh-
 }
 const directDependencies = {
   'dingtalk-stream': '2.1.4',
-  '@tencent-connect/qqbot-connector': '1.2.0',
   '@tencent-connect/qqbot-nodejs': '1.0.4',
   '@wecom/aibot-node-sdk': '1.0.7',
   qrcode: '1.5.4',
@@ -169,6 +168,10 @@ for (const [name, version] of Object.entries(directDependencies)) {
   if (manifest.dependencies?.[name] !== version) {
     throw new Error(`${name} must be a pinned direct dependency at ${version}`);
   }
+}
+if (manifest.dependencies?.['@tencent-connect/qqbot-connector'] !== undefined
+  || lock.packages?.['node_modules/@tencent-connect/qqbot-connector'] !== undefined) {
+  throw new Error('the unlicensed QQ QR connector must not be redistributed');
 }
 const bundledBuildDependencies = {
   '@larksuiteoapi/node-sdk': '1.73.0',
