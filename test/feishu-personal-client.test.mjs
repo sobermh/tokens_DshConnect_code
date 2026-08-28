@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach } from 'node:test';
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -15,13 +15,20 @@ import {
   cachedFeishuPersonalStatus,
   cacheFeishuPersonalStatus,
   CapabilityPanel,
+  clearFeishuPersonalStatusCache,
   deriveFeishuPersonalView,
+  FEISHU_PERSONAL_STATUS_CACHE_TTL_MS,
   FeishuPersonalSettings,
+  isFeishuPersonalStatusCacheFresh,
   preloadFeishuPersonalStatus,
   safeFeishuPersonalHref,
   statusMessage,
 } from '../plugin-src/client/connectors/feishu-personal/index.js';
 import { identityFile } from '../plugin-src/host/connectors/feishu-personal/identity.js';
+
+beforeEach(() => {
+  clearFeishuPersonalStatusCache();
+});
 
 test('personal Feishu client keeps the established RPC contract', async () => {
   const calls = [];
@@ -107,6 +114,38 @@ test('personal Feishu status is prefetched and rendered immediately from the cli
   assert.equal(cachedFeishuPersonalStatus(rpcCall).userName, 'Updated');
 });
 
+test('personal Feishu cache survives RPC wrapper changes and expires after its TTL', async () => {
+  let firstCalls = 0;
+  let secondCalls = 0;
+  const status = { phase: 'connected', userAuthorized: true, userName: 'Cached' };
+  const firstRpcCall = async () => {
+    firstCalls += 1;
+    return { ok: true, value: status };
+  };
+  const secondRpcCall = async () => {
+    secondCalls += 1;
+    return { ok: true, value: { ...status, userName: 'Refreshed' } };
+  };
+
+  assert.equal(await preloadFeishuPersonalStatus(firstRpcCall), status);
+  assert.equal(firstCalls, 1);
+  assert.equal(cachedFeishuPersonalStatus(secondRpcCall), status);
+  assert.equal(await preloadFeishuPersonalStatus(secondRpcCall), status);
+  assert.equal(secondCalls, 0);
+  assert.equal(isFeishuPersonalStatusCacheFresh(), true);
+  assert.equal(isFeishuPersonalStatusCacheFresh(Date.now() + FEISHU_PERSONAL_STATUS_CACHE_TTL_MS + 1), false);
+
+  const markup = renderToStaticMarkup(React.createElement(FeishuPersonalSettings, {
+    rpcCall: secondRpcCall,
+  }));
+  assert.match(markup, /已授权账号：Cached/);
+  assert.doesNotMatch(markup, /正在读取本机连接状态/);
+
+  const refreshed = await preloadFeishuPersonalStatus(secondRpcCall, { refresh: true });
+  assert.equal(refreshed.userName, 'Refreshed');
+  assert.equal(secondCalls, 1);
+});
+
 test('personal Feishu empty state is presented as loading instead of disconnected', () => {
   assert.deepEqual(deriveFeishuPersonalView(undefined), {
     phase: 'loading',
@@ -131,28 +170,10 @@ test('personal Feishu identity metadata keeps the dsh-feishu profile name', () =
   assert.match(path, /dsh-feishu\.identity\.json$/);
 });
 
-test('capability panel renders real evidence sources and missing scopes', () => {
+test('permission panel renders queried permissions without inferred tool capabilities', () => {
   const markup = renderToStaticMarkup(React.createElement(CapabilityPanel, {
     status: {
       checkedAt: '2026-08-26T04:30:00.000Z',
-      capabilities: [
-        {
-          id: 'create-doc',
-          name: '创建飞书文档',
-          provider: 'feishu_create_doc',
-          state: 'available',
-          detail: '已授权 docx:document:create',
-          source: 'lark-cli auth status --json --verify',
-        },
-        {
-          id: 'send-message',
-          name: '发送飞书消息',
-          provider: 'feishu_send_message',
-          state: 'missing_scope',
-          detail: '缺少 im:message.send_as_user',
-          source: 'lark-cli auth status --json --verify',
-        },
-      ],
       authorization: {
         source: 'lark-cli auth status --json --verify',
         appIdentity: { available: true, verified: true },
@@ -165,6 +186,18 @@ test('capability panel renders real evidence sources and missing scopes', () => 
             { id: 'base', name: '多维表格', count: 1 },
           ],
         },
+        applicationScopes: {
+          available: true,
+          count: 2,
+          values: ['approval:instance.comment', 'im:message:send_as_bot'],
+          domains: [
+            { id: 'approval', name: '审批', count: 1 },
+            { id: 'im', name: '消息', count: 1 },
+          ],
+          pendingCount: 1,
+          pendingValues: ['im:message.group_msg'],
+          source: 'lark-cli api GET /open-apis/application/v6/scopes --as bot',
+        },
         skills: {
           available: true,
           count: 28,
@@ -175,10 +208,14 @@ test('capability panel renders real evidence sources and missing scopes', () => 
     },
   }));
 
-  assert.match(markup, /实际能力/);
-  assert.match(markup, /缺少权限/);
+  assert.match(markup, /实际权限/);
   assert.match(markup, /lark-cli auth status --json --verify/);
   assert.match(markup, /28 个已安装/);
   assert.match(markup, /查看 2 项实际个人权限/);
+  assert.match(markup, /查看 2 项实际应用权限/);
+  assert.match(markup, /approval:instance.comment/);
+  assert.match(markup, /查看 1 项待生效应用权限/);
+  assert.doesNotMatch(markup, /创建飞书文档|发送飞书消息|创建多维表格|审批实例评论/);
+  assert.doesNotMatch(markup, /feishu_create_doc|feishu_send_message|feishu_create_bitable/);
   assert.doesNotMatch(markup, /首次创建应用时会预填/);
 });

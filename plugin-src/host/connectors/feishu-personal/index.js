@@ -26,6 +26,8 @@ import { createLarkcli } from "./larkcli.js";
 import { clearIdentity, readIdentity, writeIdentity } from "./identity.js";
 import { ensureSkills, inspectSkills } from "./skills-provision.js";
 import { buildCapabilityStatus } from "./capabilities.js";
+import { inspectApplicationScopes, unavailableApplicationScopes } from "./application-scopes.js";
+import { buildPermissionReport } from "./permissions.js";
 import { selectPersonalApplication } from "./application-selection.js";
 import {
     inferAuthorizedApplication,
@@ -42,6 +44,7 @@ export async function apply(ctx, config, internals = {}) {
     const readIdentityImpl = internals.readIdentity ?? readIdentity;
     const writeIdentityImpl = internals.writeIdentity ?? writeIdentity;
     const clearIdentityImpl = internals.clearIdentity ?? clearIdentity;
+    const inspectApplicationScopesImpl = internals.inspectApplicationScopes ?? inspectApplicationScopes;
     const appIdRef = credentialRef(config.appIdEnv);
     const appSecretRef = credentialRef(config.appSecretEnv);
     const applicationService = config.applicationService;
@@ -402,7 +405,10 @@ export async function apply(ctx, config, internals = {}) {
         const { liveUserStatus, ...publicStatus } = status;
         const identity = await readIdentityImpl(config.profile);
         const skills = await inspectSkillsImpl().catch(() => ({ available: false, count: 0, names: [] }));
-        const capabilityStatus = buildCapabilityStatus(liveUserStatus, skills);
+        const applicationScopes = liveUserStatus?.bot?.available === true
+            ? await inspectApplicationScopesImpl(lark).catch(() => unavailableApplicationScopes())
+            : unavailableApplicationScopes();
+        const capabilityStatus = buildCapabilityStatus(liveUserStatus, skills, applicationScopes);
         return {
             ...publicStatus,
             ...capabilityStatus,
@@ -469,6 +475,106 @@ export async function apply(ctx, config, internals = {}) {
         if (value.selectionRequired)
             lines.push('Multiple Feishu applications are available; choose one application_id or create a new application.');
         lines.push(`app configured: ${value.appConfigured}, personal identity authorized: ${value.userAuthorized}`);
+        return [{ type: 'text', text: lines.join('\n') }];
+    }
+    const permissionGroupOutput = {
+        type: 'object',
+        properties: {
+            count: { type: 'integer', required: true },
+            granted: { type: 'array', items: { type: 'string' }, required: true },
+            pendingCount: { type: 'integer', required: true },
+            pending: { type: 'array', items: { type: 'string' }, required: true },
+        },
+        additionalProperties: false,
+    };
+    const permissionStateOutput = {
+        type: 'string',
+        enum: ['granted', 'pending', 'missing', 'unknown'],
+    };
+    const permissionsOutput = {
+        type: 'object',
+        properties: {
+            checkedAt: { type: 'string', required: true },
+            requestedScope: { oneOf: [{ type: 'string' }, { type: 'null' }], required: true },
+            application: {
+                type: 'object',
+                required: true,
+                properties: {
+                    available: { type: 'boolean', required: true },
+                    source: { type: 'string', required: true },
+                    tenant: { ...permissionGroupOutput, required: true },
+                    user: { ...permissionGroupOutput, required: true },
+                },
+                additionalProperties: false,
+            },
+            personal: {
+                type: 'object',
+                required: true,
+                properties: {
+                    available: { type: 'boolean', required: true },
+                    verified: { type: 'boolean', required: true },
+                    source: { type: 'string', required: true },
+                    count: { type: 'integer', required: true },
+                    granted: { type: 'array', items: { type: 'string' }, required: true },
+                },
+                additionalProperties: false,
+            },
+            match: {
+                oneOf: [
+                    { type: 'null' },
+                    {
+                        type: 'object',
+                        properties: {
+                            scope: { type: 'string', required: true },
+                            applicationTenant: { ...permissionStateOutput, required: true },
+                            applicationUser: { ...permissionStateOutput, required: true },
+                            personal: { ...permissionStateOutput, required: true },
+                        },
+                        additionalProperties: false,
+                    },
+                ],
+                required: true,
+            },
+        },
+        additionalProperties: false,
+    };
+    function renderPermissionReport(value) {
+        const stateText = {
+            granted: 'granted',
+            pending: 'pending',
+            missing: 'not granted',
+            unknown: 'unknown because the source could not be read',
+        };
+        if (value.match !== null) {
+            return [{
+                type: 'text',
+                text: [
+                    `Feishu permission: ${value.match.scope}`,
+                    `application tenant permission: ${stateText[value.match.applicationTenant]}`,
+                    `application user permission: ${stateText[value.match.applicationUser]}`,
+                    `current personal OAuth permission: ${stateText[value.match.personal]}`,
+                    `application source: ${value.application.source}`,
+                    `personal source: ${value.personal.source}`,
+                ].join('\n'),
+            }];
+        }
+        const lines = [
+            `Application tenant permissions: ${value.application.tenant.count} granted, ${value.application.tenant.pendingCount} pending`,
+            `Application user permissions: ${value.application.user.count} granted, ${value.application.user.pendingCount} pending`,
+            `Current personal OAuth permissions: ${value.personal.count} granted`,
+            `application source: ${value.application.source}`,
+            `personal source: ${value.personal.source}`,
+        ];
+        if (value.application.tenant.granted.length > 0)
+            lines.push(`application tenant granted: ${value.application.tenant.granted.join(', ')}`);
+        if (value.application.tenant.pending.length > 0)
+            lines.push(`application tenant pending: ${value.application.tenant.pending.join(', ')}`);
+        if (value.application.user.granted.length > 0)
+            lines.push(`application user granted: ${value.application.user.granted.join(', ')}`);
+        if (value.application.user.pending.length > 0)
+            lines.push(`application user pending: ${value.application.user.pending.join(', ')}`);
+        if (value.personal.granted.length > 0)
+            lines.push(`personal OAuth granted: ${value.personal.granted.join(', ')}`);
         return [{ type: 'text', text: lines.join('\n') }];
     }
     ctx.tools.register(defineTool({
@@ -548,6 +654,33 @@ export async function apply(ctx, config, internals = {}) {
                 });
             }
             return await fullStatus();
+        },
+    }));
+    ctx.tools.register(defineTool({
+        name: 'feishu_permissions',
+        description: 'Authoritatively inspect Feishu permissions without web search. Use this whenever the user asks '
+            + 'whether a scope exists in the current authorization, which permissions are granted, or whether an '
+            + 'application/user permission is missing. With no scope, lists all application tenant permissions, '
+            + 'application user permissions, and current personal OAuth permissions separately. With scope, checks '
+            + 'that exact scope against all three identities. Read-only; never changes authorization.',
+        parameters: {
+            scope: {
+                type: 'string',
+                description: 'Optional exact Feishu scope, for example approval:instance.comment. Omit to list all permissions.',
+            },
+        },
+        output: {
+            schema: permissionsOutput,
+            render: (_args, value) => renderPermissionReport(value),
+        },
+        async execute(args, exec) {
+            if (args.scope !== undefined && args.scope.trim() === '')
+                throw new Error('scope must not be empty');
+            const liveStatus = await lark.status(exec.signal, { verify: true }).catch(() => undefined);
+            const applicationScopes = liveStatus?.bot?.available === true
+                ? await inspectApplicationScopesImpl(lark, exec.signal).catch(() => unavailableApplicationScopes())
+                : unavailableApplicationScopes();
+            return buildPermissionReport(liveStatus, applicationScopes, args.scope);
         },
     }));
     // ---- domain tools (act as the personal identity via `lark-cli api`) -----

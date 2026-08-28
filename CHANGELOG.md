@@ -6,6 +6,23 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-08-28
+
+### Added / 新增
+
+- 新增只读的 `feishu_permissions` 工具，直接查询并区分应用租户权限、应用用户权限与当前个人 OAuth 权限，可按精确 scope 检查授权、待生效或缺失状态，不再依赖模型搜索或推断。
+  Added the read-only `feishu_permissions` tool to query application tenant permissions, application user permissions, and the current personal OAuth grant separately, including exact-scope checks for granted, pending, or missing states without model-side searching or inference.
+
+### Changed / 变更
+
+- 飞书个人授权页改为展示飞书接口返回的真实应用权限、待生效权限、个人权限及各自能力域，移除根据少量工具定义生成的自定义能力列表。
+  The personal Feishu authorization page now displays actual application permissions, pending permissions, personal permissions, and their domains from Feishu provider data, replacing the inferred capability list derived from a small set of tool definitions.
+
+### Fixed / 修复
+
+- 飞书个人授权状态缓存现在跨 RPC 包装器复用并在一分钟后后台刷新，避免进入授权页面时先出现加载状态或长时间显示旧结果。
+  Personal Feishu authorization status is now reused across RPC wrapper changes and refreshed in the background after one minute, avoiding unnecessary loading states and stale results when opening the authorization page.
+
 ## [2.4.3] - 2026-08-26
 
 ### Added / 新增

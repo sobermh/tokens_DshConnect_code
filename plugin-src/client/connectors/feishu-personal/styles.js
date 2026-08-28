@@ -86,9 +86,12 @@ const CSS = String.raw`
 .dfp-evidence strong { font-size: 11px; line-height: 17px; font-weight: 620; }
 .dfp-evidence small { color: var(--dsw-alias-label-secondary, #646a73); font-size: 9px; line-height: 14px; overflow-wrap: anywhere; }
 .dfp-evidence code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dfp-scopeDomains { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.dfp-scopeGroup { display: grid; gap: 7px; margin-top: 12px; }
+.dfp-scopeGroup > strong { color: var(--dsw-alias-label-secondary, #646a73); font-size: 10px; line-height: 16px; font-weight: 620; }
+.dfp-scopeDomains { display: flex; gap: 6px; flex-wrap: wrap; }
 .dfp-scopeDomains span { min-height: 25px; display: inline-flex; align-items: center; padding: 3px 8px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 999px; color: var(--dsw-alias-label-secondary, #646a73); font-size: 9px; line-height: 16px; }
 .dfp-scopeDetails { margin-top: 12px; border-top: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
+.dfp-scopeDetails[data-tone='warning'] summary { color: #b76e00; }
 .dfp-scopeDetails summary { padding: 10px 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 10px; line-height: 16px; cursor: pointer; }
 .dfp-scopeList { max-height: 180px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 10px; overflow: auto; padding: 0 0 10px; }
 .dfp-scopeList code { min-width: 0; overflow-wrap: anywhere; }

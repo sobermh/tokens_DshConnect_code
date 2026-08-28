@@ -17,37 +17,50 @@ const PHASE_TEXT = Object.freeze({
   error: '连接失败',
 });
 
-const CAPABILITY_STATE_TEXT = Object.freeze({
-  available: '可用',
-  local_only: '已安装',
-  missing_scope: '缺少权限',
-  disconnected: '未连接',
-  unavailable: '不可用',
-});
+export const FEISHU_PERSONAL_STATUS_CACHE_TTL_MS = 60_000;
 
-const STATUS_CACHE = new WeakMap();
-const STATUS_REQUESTS = new WeakMap();
+let statusCache;
+let statusCachedAt = 0;
+let statusCacheRevision = 0;
+let statusRequest;
 
-export function cachedFeishuPersonalStatus(rpcCall) {
-  return STATUS_CACHE.get(rpcCall);
+export function cachedFeishuPersonalStatus() {
+  return statusCache;
 }
 
-export function cacheFeishuPersonalStatus(rpcCall, status) {
-  STATUS_CACHE.set(rpcCall, status);
+export function cacheFeishuPersonalStatus(_rpcCall, status) {
+  statusCache = status;
+  statusCachedAt = Date.now();
+  statusCacheRevision += 1;
   return status;
 }
 
+export function isFeishuPersonalStatusCacheFresh(now = Date.now()) {
+  return statusCache !== undefined
+    && now - statusCachedAt < FEISHU_PERSONAL_STATUS_CACHE_TTL_MS;
+}
+
+export function clearFeishuPersonalStatusCache() {
+  statusCache = undefined;
+  statusCachedAt = 0;
+  statusCacheRevision += 1;
+  statusRequest = undefined;
+}
+
 export function preloadFeishuPersonalStatus(rpcCall, { refresh = false } = {}) {
-  const inFlight = STATUS_REQUESTS.get(rpcCall);
-  if (inFlight) return inFlight;
-  const cached = cachedFeishuPersonalStatus(rpcCall);
+  if (statusRequest) return statusRequest;
+  const cached = cachedFeishuPersonalStatus();
   if (!refresh && cached !== undefined) return Promise.resolve(cached);
+  const revision = statusCacheRevision;
   const request = fetchFeishuPersonalStatus(rpcCall)
-    .then((status) => cacheFeishuPersonalStatus(rpcCall, status))
+    .then((status) => {
+      if (statusCacheRevision !== revision && statusCache !== undefined) return statusCache;
+      return cacheFeishuPersonalStatus(rpcCall, status);
+    })
     .finally(() => {
-      if (STATUS_REQUESTS.get(rpcCall) === request) STATUS_REQUESTS.delete(rpcCall);
+      if (statusRequest === request) statusRequest = undefined;
     });
-  STATUS_REQUESTS.set(rpcCall, request);
+  statusRequest = request;
   return request;
 }
 
@@ -97,11 +110,16 @@ function HealthItem({ enabled, title, detail }) {
 }
 
 export function CapabilityPanel({ status }) {
-  const capabilities = Array.isArray(status?.capabilities) ? status.capabilities : [];
   const authorization = status?.authorization;
   const scopes = authorization?.scopes;
   const domains = Array.isArray(scopes?.domains) ? scopes.domains : [];
   const scopeValues = Array.isArray(scopes?.values) ? scopes.values : [];
+  const applicationScopes = authorization?.applicationScopes;
+  const applicationDomains = Array.isArray(applicationScopes?.domains) ? applicationScopes.domains : [];
+  const applicationScopeValues = Array.isArray(applicationScopes?.values) ? applicationScopes.values : [];
+  const pendingApplicationScopeValues = Array.isArray(applicationScopes?.pendingValues)
+    ? applicationScopes.pendingValues
+    : [];
   const appIdentity = authorization?.appIdentity;
   const personalIdentity = authorization?.personalIdentity;
   const skills = authorization?.skills;
@@ -112,26 +130,7 @@ export function CapabilityPanel({ status }) {
     h('section', { className: 'dfp-section' },
       h('div', { className: 'dfp-sectionHead' },
         h('div', null,
-          h('h3', null, '实际能力'),
-          h('p', null, '根据当前账号的实际权限与本机组件生成'))),
-      capabilities.length > 0
-        ? h('div', { className: 'dfp-capabilityList' }, capabilities.map((capability) => {
-            const enabled = capability.state === 'available';
-            return h('div', { className: 'dfp-capability', key: capability.id, 'data-state': capability.state },
-              h('span', { className: 'dfp-capabilityMark', 'data-on': String(enabled) }, enabled ? '✓' : '·'),
-              h('span', { className: 'dfp-capabilityCopy' },
-                h('strong', null, capability.name),
-                h('code', null, capability.provider),
-                h('small', null, capability.detail),
-                h('small', { className: 'dfp-capabilitySource' }, `依据：${capability.source}`)),
-              h('small', { className: 'dfp-capabilityState' },
-                CAPABILITY_STATE_TEXT[capability.state] ?? '未知'));
-          }))
-        : h('div', { className: 'dfp-emptyFact' }, '等待授权状态检测')),
-    h('section', { className: 'dfp-section' },
-      h('div', { className: 'dfp-sectionHead' },
-        h('div', null,
-          h('h3', null, '检测依据'),
+          h('h3', null, '实际权限'),
           h('p', null, status?.checkedAt ? `最近检查：${new Date(status.checkedAt).toLocaleString()}` : '尚未完成实时检查'))),
       h('div', { className: 'dfp-evidenceList' },
         h('div', { className: 'dfp-evidence', 'data-on': String(appIdentity?.verified === true) },
@@ -150,6 +149,14 @@ export function CapabilityPanel({ status }) {
               ? `Token ${personalIdentity.tokenStatus ?? 'valid'} · 服务端验证通过`
               : personalIdentity?.available === true ? `Token ${personalIdentity.tokenStatus ?? '可用'}` : '个人授权不可用'),
             h('code', null, authorization?.source ?? 'lark-cli auth status'))),
+        h('div', { className: 'dfp-evidence', 'data-on': String(applicationScopes?.available === true) },
+          h('span', { className: 'dfp-healthDot', 'aria-hidden': 'true' }),
+          h('span', null,
+            h('strong', null, '实际应用权限'),
+            h('small', null, applicationScopes?.available === true
+              ? `${applicationScopes.count ?? 0} 项已授权 · ${applicationScopes.pendingCount ?? 0} 项待生效`
+              : '暂时无法读取应用权限'),
+            h('code', null, applicationScopes?.source ?? 'GET /open-apis/application/v6/scopes'))),
         h('div', { className: 'dfp-evidence', 'data-on': String((scopes?.count ?? 0) > 0) },
           h('span', { className: 'dfp-healthDot', 'aria-hidden': 'true' }),
           h('span', null,
@@ -162,21 +169,38 @@ export function CapabilityPanel({ status }) {
             h('strong', null, '官方 Lark Skills'),
             h('small', null, skillsDetail),
             h('code', null, skills?.source ?? '~/.dsh/skills/.lark-skills.json')))),
+      applicationDomains.length > 0
+        ? h('div', { className: 'dfp-scopeGroup' },
+            h('strong', null, '应用权限能力域'),
+            h('div', { className: 'dfp-scopeDomains', 'aria-label': '飞书应用权限能力域' }, applicationDomains.map((domainItem) =>
+              h('span', { key: domainItem.id }, h('span', null, domainItem.name), ` ${domainItem.count}`))))
+        : null,
+      applicationScopeValues.length > 0
+        ? h('details', { className: 'dfp-scopeDetails' },
+            h('summary', null, `查看 ${applicationScopeValues.length} 项实际应用权限`),
+            h('div', { className: 'dfp-scopeList' }, applicationScopeValues.map((scope) => h('code', { key: scope }, scope))))
+        : null,
+      pendingApplicationScopeValues.length > 0
+        ? h('details', { className: 'dfp-scopeDetails', 'data-tone': 'warning' },
+            h('summary', null, `查看 ${pendingApplicationScopeValues.length} 项待生效应用权限`),
+            h('div', { className: 'dfp-scopeList' }, pendingApplicationScopeValues.map((scope) => h('code', { key: scope }, scope))))
+        : null,
       domains.length > 0
-        ? h('div', { className: 'dfp-scopeDomains', 'aria-label': '飞书个人权限能力域' }, domains.map((domainItem) =>
-            h('span', { key: domainItem.id }, h('span', null, domainItem.name), ` ${domainItem.count}`)))
+        ? h('div', { className: 'dfp-scopeGroup' },
+            h('strong', null, '个人权限能力域'),
+            h('div', { className: 'dfp-scopeDomains', 'aria-label': '飞书个人权限能力域' }, domains.map((domainItem) =>
+              h('span', { key: domainItem.id }, h('span', null, domainItem.name), ` ${domainItem.count}`))))
         : null,
       scopeValues.length > 0
         ? h('details', { className: 'dfp-scopeDetails' },
             h('summary', null, `查看 ${scopeValues.length} 项实际个人权限`),
             h('div', { className: 'dfp-scopeList' }, scopeValues.map((scope) => h('code', { key: scope }, scope))))
         : null,
-      h('p', { className: 'dfp-evidenceNote' }, '应用身份仅验证凭据可用性；具体应用权限会在能力调用时由飞书再次校验。')));
+      h('p', { className: 'dfp-evidenceNote' }, '应用权限来自飞书租户授权状态；个人权限来自当前账号 OAuth 授权。')));
 }
 
 export function FeishuPersonalSettings({ rpcCall }) {
-  const initialStatus = cachedFeishuPersonalStatus(rpcCall);
-  const initiallyCached = React.useRef(initialStatus !== undefined);
+  const initialStatus = cachedFeishuPersonalStatus();
   const [status, setStatus] = React.useState(initialStatus);
   const [error, setError] = React.useState();
   const [busy, setBusy] = React.useState(initialStatus === undefined ? 'load' : undefined);
@@ -240,8 +264,12 @@ export function FeishuPersonalSettings({ rpcCall }) {
   }, [commitStatus, rpcCall]);
 
   React.useEffect(() => {
-    void load(initiallyCached.current, initiallyCached.current);
-  }, [load]);
+    if (cachedFeishuPersonalStatus() === undefined) {
+      void load(false, false);
+      return;
+    }
+    if (!isFeishuPersonalStatusCacheFresh()) void load(true, true);
+  }, [load, rpcCall]);
   const { phase, connected, connecting, actionHref } = deriveFeishuPersonalView(status);
   React.useEffect(() => {
     if (!connecting) return undefined;
@@ -294,7 +322,7 @@ export function FeishuPersonalSettings({ rpcCall }) {
       h('button', {
         type: 'button', role: 'tab', 'aria-selected': tab === 'capabilities',
         onClick: () => setTab('capabilities'),
-      }, '能力与权限')),
+      }, '权限与组件')),
     tab === 'connection'
       ? h('div', { className: 'dfp-tabPanel', role: 'tabpanel' },
           h('section', { className: 'dfp-section' },

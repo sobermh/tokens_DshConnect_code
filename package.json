@@ -1,6 +1,6 @@
 {
   "name": "@tokens/dsh-connect",
-  "version": "2.4.4",
+  "version": "2.5.0",
   "description": "统一管理九种 IM 机器人与飞书个人账号授权，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",

@@ -20,19 +20,12 @@ const EN = Object.freeze({
   '等待个人授权': 'Waiting for personal authorization',
   '已连接': 'Connected',
   '连接失败': 'Connection failed',
-  '创建飞书文档': 'Create Feishu document',
-  '发送飞书消息': 'Send Feishu message',
-  '创建多维表格': 'Create Bitable',
   '官方 Lark Skills': 'Official Lark Skills',
   '已安装': 'Installed',
   '缺少权限': 'Missing permission',
   '不可用': 'Unavailable',
-  '实际能力': 'Verified capabilities',
-  '根据当前账号的实际权限与本机组件生成': 'Derived from the current account permissions and local components',
-  '依据：${capability.source}': 'Source: ${capability.source}',
   '未知': 'Unknown',
   '等待授权状态检测': 'Waiting for authorization status check',
-  '检测依据': 'Verification sources',
   '最近检查：${new Date(status.checkedAt).toLocaleString()}': 'Last checked: ${new Date(status.checkedAt).toLocaleString()}',
   '尚未完成实时检查': 'Live verification has not completed',
   '应用身份': 'App identity',
@@ -44,12 +37,21 @@ const EN = Object.freeze({
   "Token ${personalIdentity.tokenStatus ?? '可用'}": "Token ${personalIdentity.tokenStatus ?? 'available'}",
   '个人授权不可用': 'Personal authorization unavailable',
   '实际个人权限': 'Actual personal permissions',
+  '实际应用权限': 'Actual app permissions',
+  '暂时无法读取实际应用权限': 'Could not read actual app permissions',
+  '暂时无法读取应用权限': 'Could not read app permissions',
+  '${applicationScopes.count ?? 0} 项已授权 · ${applicationScopes.pendingCount ?? 0} 项待生效': '${applicationScopes.count ?? 0} granted · ${applicationScopes.pendingCount ?? 0} pending',
+  '应用权限能力域': 'App permission domains',
+  '飞书应用权限能力域': 'Feishu app permission domains',
+  '个人权限能力域': 'Personal permission domains',
   '${scopes?.count ?? 0} 项权限 · ${domains.length} 个能力域': '${scopes?.count ?? 0} permissions · ${domains.length} capability domains',
   '${skills.count} 个已安装': '${skills.count} installed',
   '本机 Skills 清单不可用': 'Local Skills manifest unavailable',
   '飞书个人权限能力域': 'Feishu personal permission domains',
   '查看 ${scopeValues.length} 项实际个人权限': 'View ${scopeValues.length} actual personal permissions',
-  '应用身份仅验证凭据可用性；具体应用权限会在能力调用时由飞书再次校验。': 'App identity verifies credential availability only. Feishu checks specific app permissions again when a capability is used.',
+  '查看 ${applicationScopeValues.length} 项实际应用权限': 'View ${applicationScopeValues.length} actual app permissions',
+  '查看 ${pendingApplicationScopeValues.length} 项待生效应用权限': 'View ${pendingApplicationScopeValues.length} pending app permissions',
+  '应用权限来自飞书租户授权状态；个人权限来自当前账号 OAuth 授权。': 'App permissions come from Feishu tenant authorization status; personal permissions come from the current account OAuth grant.',
   '服务端验证通过': 'Server verified',
   '凭据已安全保存': 'Credentials stored securely',
   '本机 Token 可用': 'Local token available',
@@ -88,7 +90,7 @@ const EN = Object.freeze({
   '等待连接': 'Waiting for connection',
   '飞书个人账号设置视图': 'Personal Feishu account views',
   '连接与授权': 'Connection and authorization',
-  '能力与权限': 'Capabilities and permissions',
+  '权限与组件': 'Permissions and components',
   '个人连接': 'Personal connection',
   '接入方式': 'Connection method',
   '服务区域': 'Service region',
@@ -714,8 +716,6 @@ function channelName(value) {
 function translateDynamic(text) {
   let match = /^已授权账号：(.+)$/.exec(text);
   if (match) return `Authorized account: ${match[1]}`;
-  match = /^依据：(.+)$/.exec(text);
-  if (match) return `Source: ${match[1]}`;
   match = /^最近检查：(.+)$/.exec(text);
   if (match) return `Last checked: ${match[1]}`;
   match = /^已授权 (.+)$/.exec(text);
@@ -728,10 +728,16 @@ function translateDynamic(text) {
   if (match) return `Token ${match[1]}`;
   match = /^(\d+) 项权限 · (\d+) 个能力域$/.exec(text);
   if (match) return `${match[1]} permissions · ${match[2]} capability domains`;
+  match = /^(\d+) 项已授权 · (\d+) 项待生效$/.exec(text);
+  if (match) return `${match[1]} granted · ${match[2]} pending`;
   match = /^(\d+) 个已安装(?: · (.+))?$/.exec(text);
   if (match) return `${match[1]} installed${match[2] ? ` · ${match[2]}` : ''}`;
   match = /^查看 (\d+) 项实际个人权限$/.exec(text);
   if (match) return `View ${match[1]} actual personal permissions`;
+  match = /^查看 (\d+) 项实际应用权限$/.exec(text);
+  if (match) return `View ${match[1]} actual app permissions`;
+  match = /^查看 (\d+) 项待生效应用权限$/.exec(text);
+  if (match) return `View ${match[1]} pending app permissions`;
   match = /^(\d+) 项已读取$/.exec(text);
   if (match) return `${match[1]} loaded`;
   match = /^(\d+) \/ (\d+) 在线$/.exec(text);
