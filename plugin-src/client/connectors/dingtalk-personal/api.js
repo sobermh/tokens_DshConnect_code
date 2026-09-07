@@ -1,10 +1,9 @@
-export const DINGTALK_PERSONAL_RPC_CHANNEL = '/tokens-dingtalk-workspace';
+import {
+  DINGTALK_PERSONAL_ENDPOINTS,
+  DINGTALK_PERSONAL_RPC_CHANNEL,
+} from '../../../shared/connectors/dingtalk-personal-contract.js';
 
-export const DINGTALK_PERSONAL_ENDPOINTS = Object.freeze({
-  status: 'dingtalk/status',
-  connect: 'dingtalk/connect',
-  disconnect: 'dingtalk/disconnect',
-});
+export { DINGTALK_PERSONAL_ENDPOINTS, DINGTALK_PERSONAL_RPC_CHANNEL };
 
 function unwrap(result) {
   if (result?.ok === true) return result.value;

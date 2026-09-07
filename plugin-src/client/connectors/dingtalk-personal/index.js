@@ -5,75 +5,24 @@ import { h } from '../../i18n.js';
 import {
   connectDingtalkPersonal,
   disconnectDingtalkPersonal,
-  fetchDingtalkPersonalStatus,
 } from './api.js';
+import {
+  cachedDingtalkPersonalStatus,
+  cacheDingtalkPersonalStatus,
+  isDingtalkPersonalStatusCacheFresh,
+  preloadDingtalkPersonalStatus,
+} from './status-cache.js';
+import { deriveDingtalkPersonalView } from './view-model.js';
 
-export const DINGTALK_PERSONAL_STATUS_CACHE_TTL_MS = 15_000;
-
-let statusCache;
-let statusCachedAt = 0;
-let preloadInFlight;
-
-export function cachedDingtalkPersonalStatus() {
-  return statusCache;
-}
-
-export function cacheDingtalkPersonalStatus(_rpcCall, status) {
-  statusCache = status;
-  statusCachedAt = Date.now();
-  return status;
-}
-
-export function clearDingtalkPersonalStatusCache() {
-  statusCache = undefined;
-  statusCachedAt = 0;
-  preloadInFlight = undefined;
-}
-
-export function isDingtalkPersonalStatusCacheFresh(now = Date.now()) {
-  return statusCache !== undefined
-    && now - statusCachedAt <= DINGTALK_PERSONAL_STATUS_CACHE_TTL_MS;
-}
-
-export function preloadDingtalkPersonalStatus(rpcCall, { refresh = false } = {}) {
-  if (!refresh && isDingtalkPersonalStatusCacheFresh()) return Promise.resolve(statusCache);
-  if (!refresh && preloadInFlight !== undefined) return preloadInFlight;
-  const request = fetchDingtalkPersonalStatus(rpcCall)
-    .then((status) => cacheDingtalkPersonalStatus(rpcCall, status))
-    .finally(() => {
-      if (preloadInFlight === request) preloadInFlight = undefined;
-    });
-  preloadInFlight = request;
-  return request;
-}
-
-export function safeDingtalkPersonalHref(value) {
-  if (typeof value !== 'string') return undefined;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:' || url.hostname !== 'login.dingtalk.com'
-      || url.pathname !== '/oauth2/device/verify.htm') return undefined;
-    const code = url.searchParams.get('user_code');
-    if ([...url.searchParams.keys()].length !== 1
-      || code === null || !/^[A-Z0-9]{4,12}(?:-[A-Z0-9]{2,12})+$/.test(code)) return undefined;
-    return url.href;
-  } catch {
-    return undefined;
-  }
-}
-
-export function deriveDingtalkPersonalView(status) {
-  if (status === undefined) {
-    return { phase: 'loading', connected: false, connecting: false, actionHref: undefined };
-  }
-  const connected = status.authenticated === true;
-  const phase = connected ? 'connected' : status.phase ?? 'idle';
-  const connecting = !connected && (phase === 'preparing' || phase === 'authorizing');
-  const actionHref = phase === 'authorizing'
-    ? safeDingtalkPersonalHref(status.authorizeUrl)
-    : undefined;
-  return { phase, connected, connecting, actionHref };
-}
+export {
+  cachedDingtalkPersonalStatus,
+  cacheDingtalkPersonalStatus,
+  clearDingtalkPersonalStatusCache,
+  DINGTALK_PERSONAL_STATUS_CACHE_TTL_MS,
+  isDingtalkPersonalStatusCacheFresh,
+  preloadDingtalkPersonalStatus,
+} from './status-cache.js';
+export { deriveDingtalkPersonalView, safeDingtalkPersonalHref } from './view-model.js';
 
 const PHASE_LABELS = Object.freeze({
   loading: '读取中',
