@@ -2,11 +2,38 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  applyDingtalkPersonalConnector,
   applyFeishuPersonalConnector,
   createImHostPlugin,
   inject,
   name,
 } from '../plugin-src/host/index.mjs';
+import { DINGTALK_INTENT_ROUTING_PROMPT } from '../plugin-src/host/connectors/dingtalk-personal/intent-routing.js';
+
+test('an unqualified DingTalk connection request defaults to personal authorization', () => {
+  assert.match(DINGTALK_INTENT_ROUTING_PROMPT, /帮我连接钉钉/);
+  assert.match(DINGTALK_INTENT_ROUTING_PROMPT, /Call dingtalk_connect directly/);
+  assert.match(DINGTALK_INTENT_ROUTING_PROMPT, /do not ask.*choose between a personal account and a bot/);
+  assert.match(DINGTALK_INTENT_ROUTING_PROMPT, /only when.*explicitly mentions a bot/i);
+});
+
+test('DingTalk personal connector runs inside an awaited child plugin fiber', async () => {
+  const events = [];
+  const connector = { name: 'dingtalk-personal', apply() {} };
+  const config = {};
+  const fiber = { async await() { events.push('fiber:await'); } };
+  const ctx = {
+    plugin(plugin, pluginConfig) {
+      events.push('ctx:plugin');
+      assert.equal(plugin, connector);
+      assert.equal(pluginConfig, config);
+      return fiber;
+    },
+  };
+
+  assert.equal(await applyDingtalkPersonalConnector(ctx, config, async () => connector), fiber);
+  assert.deepEqual(events, ['ctx:plugin', 'fiber:await']);
+});
 
 test('Feishu personal connector runs inside an awaited child plugin fiber', async () => {
   const events = [];
@@ -83,6 +110,7 @@ test('Host composes message channels and service connectors inside one plugin co
     applyDiscord: async (ctx, config) => calls.push(['discord', ctx, config]),
     applyWhatsapp: async (ctx, config) => calls.push(['whatsapp', ctx, config]),
     applyFeishuPersonal: async (ctx, config) => calls.push(['feishuPersonal', ctx, config]),
+    applyDingtalkPersonal: async (ctx, config) => calls.push(['dingtalkPersonal', ctx, config]),
   });
   const ctx = { marker: 'shared-context' };
   const config = {
@@ -97,6 +125,7 @@ test('Host composes message channels and service connectors inside one plugin co
     discord: { replyTimeoutMs: 60_000 },
     whatsapp: { replyTimeoutMs: 60_000 },
     feishuPersonal: { appName: 'Local assistant' },
+    dingtalkPersonal: { channel: 'stable' },
   };
 
   await plugin.apply(ctx, config);
@@ -127,6 +156,7 @@ test('Host composes message channels and service connectors inside one plugin co
       appDesc: 'TokensHarness · 飞书连接',
       profile: 'dsh-feishu',
     }],
+    ['dingtalkPersonal', ctx, { channel: 'stable' }],
   ]);
 });
 
@@ -141,6 +171,7 @@ test('Host passes one shared Feishu application service to IM and personal autho
     },
     applyFeishu: async (_ctx, config) => calls.push(['im', config.applicationService]),
     applyFeishuPersonal: async (_ctx, config) => calls.push(['personal', config.applicationService]),
+    applyDingtalkPersonal: noOp,
     applyWeixin: noOp,
     applyDingtalk: noOp,
     applyWecom: noOp,
@@ -167,6 +198,7 @@ const CHANNELS = [
   ['discord', 'applyDiscord'],
   ['whatsapp', 'applyWhatsapp'],
   ['feishuPersonal', 'applyFeishuPersonal'],
+  ['dingtalkPersonal', 'applyDingtalkPersonal'],
 ];
 
 function activationFixture(failedChannels) {

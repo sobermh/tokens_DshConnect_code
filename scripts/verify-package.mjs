@@ -23,6 +23,8 @@ const required = [
   'plugin-src/host/channels/whatsapp/index.mjs',
   'plugin-src/host/connectors/feishu-personal/index.js',
   'plugin-src/client/connectors/feishu-personal/index.js',
+  'plugin-src/host/connectors/dingtalk-personal/index.js',
+  'plugin-src/client/connectors/dingtalk-personal/index.js',
   'src/channels/feishu/feishu-runtime.mjs',
   'src/channels/weixin/weixin-runtime.mjs',
   'src/channels/dingtalk/dingtalk-runtime.mjs',
@@ -53,6 +55,9 @@ if (manifest.name !== '@tokens/dsh-connect'
   || lock.name !== '@tokens/dsh-connect'
   || lock.packages?.['']?.name !== '@tokens/dsh-connect') {
   throw new Error('package metadata must use the @tokens/dsh-connect identity');
+}
+if (manifest.version !== lock.version || manifest.version !== lock.packages?.['']?.version) {
+  throw new Error('package manifest and lockfile versions must match');
 }
 
 // DSH runtime packages use module-local Symbol keys, so a second physical copy breaks Host lookup.
@@ -100,6 +105,7 @@ if (!client.includes('id: "connect"')
 }
 for (const marker of [
   'feishu-personal',
+  'dingtalk-personal',
   '\\u98DE\\u4E66\\u4E2A\\u4EBA\\u8D26\\u53F7',
   'IM\\u673A\\u5668\\u4EBA',
   '\\u5E94\\u7528\\u6388\\u6743',
@@ -138,6 +144,16 @@ for (const marker of [
 ]) {
   if (!host.includes(marker)) {
     throw new Error(`host bundle is missing personal Feishu marker ${marker}`);
+  }
+}
+for (const marker of [
+  '/tokens-dingtalk-workspace',
+  'dingtalk_connect',
+  'dingtalk_status',
+  'dsh-connect:dingtalk-workspace',
+]) {
+  if (!host.includes(marker)) {
+    throw new Error(`host bundle is missing personal DingTalk marker ${marker}`);
   }
 }
 if (/@xmanrui\/dsh-(?:feishu|weixin|dingtalk)/.test(host)) {

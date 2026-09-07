@@ -1,7 +1,7 @@
 {
   "name": "@tokens/dsh-connect",
-  "version": "2.5.0",
-  "description": "统一管理九种 IM 机器人与飞书个人账号授权，并接入本机 DeepSeek Harness。",
+  "version": "2.6.0",
+  "description": "统一管理九种 IM 机器人及飞书、钉钉个人账号授权，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -21,6 +21,7 @@
     "discord",
     "whatsapp",
     "personal-oauth",
+    "dingtalk-workspace-cli",
     "connection-center"
   ],
   "author": {

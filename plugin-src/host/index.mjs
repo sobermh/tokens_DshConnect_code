@@ -47,6 +47,10 @@ async function loadFeishuPersonalConnector() {
   return import('./connectors/feishu-personal/index.js');
 }
 
+async function loadDingtalkPersonalConnector() {
+  return import('./connectors/dingtalk-personal/index.js');
+}
+
 export async function applyFeishuPersonalConnector(
   ctx,
   config,
@@ -57,6 +61,18 @@ export async function applyFeishuPersonalConnector(
     return connector.apply(ctx, config);
   }
 
+  const fiber = ctx.plugin(connector, config);
+  await fiber.await();
+  return fiber;
+}
+
+export async function applyDingtalkPersonalConnector(
+  ctx,
+  config,
+  loadConnector = loadDingtalkPersonalConnector,
+) {
+  const connector = await loadConnector();
+  if (typeof ctx?.plugin !== 'function') return connector.apply(ctx, config);
   const fiber = ctx.plugin(connector, config);
   await fiber.await();
   return fiber;
@@ -78,6 +94,7 @@ export function createImHostPlugin(internals = {}) {
   const startDiscord = internals.applyDiscord ?? applyDiscord;
   const startWhatsapp = internals.applyWhatsapp ?? applyWhatsapp;
   const startFeishuPersonal = internals.applyFeishuPersonal ?? applyFeishuPersonalConnector;
+  const startDingtalkPersonal = internals.applyDingtalkPersonal ?? applyDingtalkPersonalConnector;
   const createApplicationService = internals.createFeishuApplicationService
     ?? createFeishuApplicationService;
   const channels = [
@@ -91,6 +108,7 @@ export function createImHostPlugin(internals = {}) {
     ['discord', startDiscord],
     ['whatsapp', startWhatsapp],
     ['feishuPersonal', startFeishuPersonal],
+    ['dingtalkPersonal', startDingtalkPersonal],
   ];
   return Object.freeze({
     name,
@@ -124,7 +142,9 @@ export function createImHostPlugin(internals = {}) {
           }
           await start(ctx, channel === 'feishuPersonal'
             ? feishuPersonalConfig(config, applicationService)
-            : channelConfig(config, channel, applicationService));
+            : channel === 'dingtalkPersonal'
+              ? (config.dingtalkPersonal ?? {})
+              : channelConfig(config, channel, applicationService));
         } catch (error) {
           failures.push(error);
           logger.error?.(

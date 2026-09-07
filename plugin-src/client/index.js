@@ -43,6 +43,12 @@ import {
   preloadFeishuPersonalStatus,
 } from './connectors/feishu-personal/index.js';
 import { installFeishuPersonalStyles } from './connectors/feishu-personal/styles.js';
+import { DINGTALK_PERSONAL_RPC_CHANNEL } from './connectors/dingtalk-personal/api.js';
+import {
+  DingtalkPersonalSettings,
+  preloadDingtalkPersonalStatus,
+} from './connectors/dingtalk-personal/index.js';
+import { installDingtalkPersonalStyles } from './connectors/dingtalk-personal/styles.js';
 import { en, h, IM_LOCALE_NAMESPACE, setImTranslator, zh } from './i18n.js';
 import {
   createLoopbackAwareRpcCalls,
@@ -76,6 +82,7 @@ export const CHANNEL_GROUPS = Object.freeze([
     label: '应用授权',
     channels: Object.freeze([
       { id: 'feishu-personal', label: '飞书个人账号' },
+      { id: 'dingtalk-personal', label: '钉钉个人账号' },
     ]),
   }),
 ]);
@@ -128,7 +135,7 @@ function WhatsappLogo() {
 function ChannelLogo({ channel }) {
   if (channel === 'weixin') return h(WeixinLogo);
   if (channel === 'feishu-bot' || channel === 'feishu-personal') return h(FeishuLogo);
-  if (channel === 'dingtalk') return h(DingtalkLogo);
+  if (channel === 'dingtalk' || channel === 'dingtalk-personal') return h(DingtalkLogo);
   if (channel === 'wecom') return h(WecomLogo);
   if (channel === 'qq') return h(QqLogo);
   if (channel === 'slack') return h(SlackLogo);
@@ -182,6 +189,7 @@ export function IMSettingsTab({
   weixinRpcCall,
   whatsappRpcCall,
   feishuPersonalRpcCall,
+  dingtalkPersonalRpcCall,
   workspaceDirectoryPicker,
   browserLocation = globalThis.location,
   navigateToRecoveryUrl = replacePageLocation,
@@ -225,6 +233,7 @@ export function IMSettingsTab({
     weixinRpcCall,
     whatsappRpcCall,
     feishuPersonalRpcCall,
+    dingtalkPersonalRpcCall,
   }, {
     location: browserLocation,
     onRecovery: reportLoopbackRecovery,
@@ -234,6 +243,7 @@ export function IMSettingsTab({
     discordRpcCall,
     feishuRpcCall,
     feishuPersonalRpcCall,
+    dingtalkPersonalRpcCall,
     qqRpcCall,
     reportLoopbackRecovery,
     slackRpcCall,
@@ -244,7 +254,8 @@ export function IMSettingsTab({
   ]);
   React.useEffect(() => {
     void preloadFeishuPersonalStatus(rpcCalls.feishuPersonalRpcCall).catch(() => {});
-  }, [rpcCalls.feishuPersonalRpcCall]);
+    void preloadDingtalkPersonalStatus(rpcCalls.dingtalkPersonalRpcCall).catch(() => {});
+  }, [rpcCalls.dingtalkPersonalRpcCall, rpcCalls.feishuPersonalRpcCall]);
   return h(WorkspaceDirectoryPickerContext.Provider, { value: workspaceDirectoryPicker },
     h('section', { className: 'dim-page', 'aria-label': '连接中心设置' },
     h('header', { className: 'dim-title' },
@@ -336,7 +347,9 @@ export function IMSettingsTab({
                     ? h(DiscordSettingsTab, { rpcCall: rpcCalls.discordRpcCall })
                     : active.id === 'whatsapp'
                       ? h(WhatsappSettingsTab, { rpcCall: rpcCalls.whatsappRpcCall })
-                      : h(FeishuPersonalSettings, { rpcCall: rpcCalls.feishuPersonalRpcCall })),
+                    : active.id === 'feishu-personal'
+                      ? h(FeishuPersonalSettings, { rpcCall: rpcCalls.feishuPersonalRpcCall })
+                      : h(DingtalkPersonalSettings, { rpcCall: rpcCalls.dingtalkPersonalRpcCall })),
     ),
     ),
   ));
@@ -365,6 +378,7 @@ export function apply(ctx) {
       installDiscordStyles(),
       installWhatsappStyles(),
       installFeishuPersonalStyles(),
+      installDingtalkPersonalStyles(),
       installImStyles(),
     ];
     return () => {
@@ -392,6 +406,8 @@ export function apply(ctx) {
     ctx.connection.rpc.call(SLACK_RPC_CHANNEL, endpoint, payload, signal);
   const feishuPersonalRpcCall = (endpoint, payload, signal) =>
     ctx.connection.rpc.call(FEISHU_PERSONAL_RPC_CHANNEL, endpoint, payload, signal);
+  const dingtalkPersonalRpcCall = (endpoint, payload, signal) =>
+    ctx.connection.rpc.call(DINGTALK_PERSONAL_RPC_CHANNEL, endpoint, payload, signal);
   const workspaceDirectoryPicker = Object.freeze({
     listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
     pickDirectory: () => ctx.workspaces.pickDirectory(),
@@ -414,6 +430,7 @@ export function apply(ctx) {
       weixinRpcCall,
       whatsappRpcCall,
       feishuPersonalRpcCall,
+      dingtalkPersonalRpcCall,
       workspaceDirectoryPicker,
     }),
   }, IMSettingsTab));

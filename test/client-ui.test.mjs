@@ -117,6 +117,7 @@ test('connection center separates IM bots and app authorization', async () => {
     discordRpcCall: async () => ({ ok: true, value: {} }),
     whatsappRpcCall: async () => ({ ok: true, value: {} }),
     feishuPersonalRpcCall: async () => ({ ok: true, value: {} }),
+    dingtalkPersonalRpcCall: async () => ({ ok: true, value: {} }),
   }));
 
   assert.match(markup, /连接中心/);
@@ -205,6 +206,7 @@ test('connection center category switch reveals app authorization without a long
       discordRpcCall: rpcCall,
       whatsappRpcCall: rpcCall,
       feishuPersonalRpcCall,
+      dingtalkPersonalRpcCall: rpcCall,
     }));
   });
 
@@ -233,7 +235,7 @@ test('connection center category switch reveals app authorization without a long
       .props.onClick();
   });
 
-  assert.deepEqual(channelLabels(), ['飞书个人账号']);
+  assert.deepEqual(channelLabels(), ['飞书个人账号', '钉钉个人账号']);
   const modeTabs = renderer.root
     .findAll((node) => node.type === 'button' && node.props.className === 'dim-modeTab');
   assert.equal(modeTabs.find((node) => node.props['aria-label'] === '应用授权').props['aria-selected'], true);
