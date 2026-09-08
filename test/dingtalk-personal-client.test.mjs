@@ -19,7 +19,7 @@ import {
   safeDingtalkPersonalHref,
 } from '../plugin-src/client/connectors/dingtalk-personal/index.js';
 
-const AUTH_URL = 'https://login.dingtalk.com/oauth2/device/verify.htm?user_code=NFSZ-GHSD';
+const AUTH_URL = 'https://login.dingtalk.com/oauth2/auth?client_id=ding_test_client&redirect_uri=http%3A%2F%2F127.0.0.1%3A54321%2Fcallback&response_type=code&scope=openid+corpid&prompt=consent';
 
 beforeEach(() => clearDingtalkPersonalStatusCache());
 
@@ -45,6 +45,8 @@ test('DingTalk personal client uses its isolated RPC contract', async () => {
 test('DingTalk client accepts only the one-click official authorization URL', () => {
   assert.equal(safeDingtalkPersonalHref(AUTH_URL), AUTH_URL);
   assert.equal(safeDingtalkPersonalHref(AUTH_URL.replace('https:', 'http:')), undefined);
+  assert.equal(safeDingtalkPersonalHref(AUTH_URL.replace('127.0.0.1', 'evil.test')), undefined);
+  assert.equal(safeDingtalkPersonalHref(`${AUTH_URL}&state=unexpected`), undefined);
   assert.equal(safeDingtalkPersonalHref('javascript:alert(1)'), undefined);
   assert.equal(safeDingtalkPersonalHref(null), undefined);
 });
@@ -75,6 +77,6 @@ test('DingTalk personal settings render the one-click authorization action', () 
   }));
   assert.match(markup, /钉钉个人账号/);
   assert.match(markup, /打开钉钉授权页面/);
-  assert.match(markup, /href="https:\/\/login\.dingtalk\.com\/oauth2\/device\/verify\.htm\?user_code=NFSZ-GHSD"/);
+  assert.match(markup, /href="https:\/\/login\.dingtalk\.com\/oauth2\/auth\?/);
   assert.doesNotMatch(markup, /实验|deviceCode|userCode|<input/);
 });

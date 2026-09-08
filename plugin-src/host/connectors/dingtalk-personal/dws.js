@@ -11,8 +11,10 @@ import {
 const DEFAULT_TIMEOUT_MS = 120_000;
 const LOGIN_TIMEOUT_MS = 15 * 60_000;
 const MAX_OUTPUT_SIZE = 8 * 1024 * 1024;
+const MAX_ERROR_DETAIL_SIZE = 4 * 1024;
 const ANSI_ESCAPE = /\u001b\[[0-?]*[ -/]*[@-~]/g;
-const AUTH_URL_PATTERN = /https:\/\/login\.dingtalk\.com\/oauth2\/device\/verify\.htm\?[^\s"'<>\u001b]+/g;
+const AUTH_URL_PATTERN = /https:\/\/login\.dingtalk\.com\/oauth2\/(?:device\/verify\.htm|auth)\?[^\s"'<>\u001b]+/g;
+const AUTH_URL_REDACTION_PATTERN = /https:\/\/login\.dingtalk\.com\/oauth2\/(?:device\/verify\.htm|auth)(?:\?[^\s"'<>\u001b]+)?/gi;
 
 const ALLOWED_TOP_LEVEL = new Set([
   'agoal', 'aisearch', 'aitable', 'api', 'attendance', 'calendar', 'chat', 'contact',
@@ -31,10 +33,12 @@ function asString(value) {
 export function sanitizeDwsText(value) {
   return String(value ?? '')
     .replace(ANSI_ESCAPE, '')
+    .replace(AUTH_URL_REDACTION_PATTERN, '[DingTalk authorization link redacted]')
     .replace(/("(?:access_token|refresh_token|client_secret|device_code|user_code|accessToken|refreshToken|clientSecret|deviceCode|userCode)"\s*:\s*")[^"]*(")/gi, '$1[REDACTED]$2')
+    .replace(/\b(access[_-]?token|refresh[_-]?token|client[_-]?secret|device[_-]?code|user[_-]?code)\s*([:=])\s*([^\s,;]+)/gi, '$1$2[REDACTED]')
     .replace(/(authorization\s*:\s*bearer\s+)[^\s,;]+/gi, '$1[REDACTED]')
-    .replace(/((?:--token|--client-secret)\s+)[^\s]+/gi, '$1[REDACTED]')
-    .replace(/(授权码\s*:\s*)[A-Z0-9-]+/gi, '$1[REDACTED]');
+    .replace(/((?:--token|--client-secret)(?:=|\s+))[^\s]+/gi, '$1[REDACTED]')
+    .replace(/((?:授权码|验证码|user\s+code|device\s+code)\s*[:=]\s*)[A-Z0-9-]+/gi, '$1[REDACTED]');
 }
 
 export function trustedDingtalkAuthorizationUrl(value) {
@@ -43,11 +47,37 @@ export function trustedDingtalkAuthorizationUrl(value) {
     try {
       const url = new URL(match[0]);
       if (url.protocol !== 'https:' || url.hostname !== 'login.dingtalk.com'
-        || url.pathname !== '/oauth2/device/verify.htm') continue;
+        || url.port !== '' || url.username !== '' || url.password !== '') continue;
       const keys = [...url.searchParams.keys()];
-      const code = url.searchParams.get('user_code');
-      if (keys.length !== 1 || keys[0] !== 'user_code'
-        || code === null || !/^[A-Z0-9]{4,12}(?:-[A-Z0-9]{2,12})+$/.test(code)) continue;
+      if (url.pathname === '/oauth2/device/verify.htm') {
+        const code = url.searchParams.get('user_code');
+        if (keys.length === 1 && keys[0] === 'user_code'
+          && code !== null && /^[A-Z0-9]{4,12}(?:-[A-Z0-9]{2,12})+$/.test(code)) {
+          return url.href;
+        }
+        continue;
+      }
+      if (url.pathname !== '/oauth2/auth') continue;
+      const allowedKeys = new Set([
+        'client_id', 'redirect_uri', 'response_type', 'scope', 'prompt', 'corpId',
+      ]);
+      if (keys.length < 5 || keys.length > 6 || new Set(keys).size !== keys.length
+        || keys.some((key) => !allowedKeys.has(key))) continue;
+      const clientId = url.searchParams.get('client_id');
+      const redirectValue = url.searchParams.get('redirect_uri');
+      const corpId = url.searchParams.get('corpId');
+      if (clientId === null || clientId.trim() === '' || clientId.length > 256
+        || redirectValue === null
+        || (corpId !== null && (corpId.trim() === '' || corpId.length > 256))
+        || url.searchParams.get('response_type') !== 'code'
+        || url.searchParams.get('scope') !== 'openid corpid'
+        || url.searchParams.get('prompt') !== 'consent') continue;
+      const redirect = new URL(redirectValue);
+      const port = Number(redirect.port);
+      if (redirect.protocol !== 'http:' || redirect.hostname !== '127.0.0.1'
+        || !Number.isInteger(port) || port < 1 || port > 65_535
+        || redirect.pathname !== '/callback' || redirect.search !== '' || redirect.hash !== ''
+        || redirect.username !== '' || redirect.password !== '') continue;
       return url.href;
     } catch {
       // Keep scanning in case a later URL is valid.
@@ -186,8 +216,12 @@ export function validateDwsToolArgs(args, confirmed = false) {
 }
 
 function commandFailure(result, action) {
-  const detail = sanitizeDwsText(result.stderr.trim() || result.stdout.trim());
-  return new Error(`dws ${action} failed${detail === '' ? '' : `: ${detail}`}`);
+  const sanitized = sanitizeDwsText(result.stderr.trim() || result.stdout.trim()).trim();
+  const detail = sanitized.length > MAX_ERROR_DETAIL_SIZE
+    ? `${sanitized.slice(0, MAX_ERROR_DETAIL_SIZE)}\n[output truncated]`
+    : sanitized;
+  const exit = Number.isInteger(result.code) ? ` (exit code ${result.code})` : '';
+  return new Error(`dws ${action} failed${exit}${detail === '' ? '' : `: ${detail}`}`);
 }
 
 export function createDws(internals = {}) {
@@ -201,29 +235,31 @@ export function createDws(internals = {}) {
     return runImpl(bin, args, options);
   }
 
-  async function status(signal) {
-    const bin = await dwsPathImpl();
-    if (bin === undefined) {
-      return {
-        installed: false,
-        version: null,
-        authenticated: false,
-        tokenValid: false,
-        refreshTokenValid: false,
-        userName: null,
-        corpName: null,
-        expiresAt: null,
-        refreshExpiresAt: null,
-        message: 'DWS 尚未安装',
-        profile: null,
-      };
-    }
+  async function readStatus(bin, signal) {
     const result = await run(bin, ['auth', 'status', '--format', 'json'], { signal });
     try {
       return statusFromMap(parseDwsJson(result.stdout || result.stderr), await installedVersionImpl());
     } catch {
       return statusFromMap({ authenticated: false, message: '无法读取 DWS 授权状态' }, await installedVersionImpl());
     }
+  }
+
+  async function status(signal) {
+    const bin = await dwsPathImpl();
+    if (bin !== undefined) return readStatus(bin, signal);
+    return {
+      installed: false,
+      version: null,
+      authenticated: false,
+      tokenValid: false,
+      refreshTokenValid: false,
+      userName: null,
+      corpName: null,
+      expiresAt: null,
+      refreshExpiresAt: null,
+      message: 'DWS 尚未安装',
+      profile: null,
+    };
   }
 
   return Object.freeze({
@@ -237,20 +273,21 @@ export function createDws(internals = {}) {
       const bin = await ensureDwsImpl();
       const parser = createAuthorizationUrlParser(onAuthorizeUrl);
       const result = await run(bin, [
-        'auth', 'login', '--device', '--recommend', '--no-browser', '--format', 'json',
+        'auth', 'login', '--recommend', '--no-browser', '--format', 'json',
       ], {
         signal,
         timeoutMs: LOGIN_TIMEOUT_MS,
         onOutput: (chunk) => parser.push(chunk),
       });
       parser.push('\n');
+      const current = await readStatus(bin, signal);
+      if (current.authenticated) return current;
       if (result.code !== 0) {
-        throw new Error(`DWS authorization did not complete (exit code ${result.code}). Please retry.`);
+        throw commandFailure(result, 'auth login');
       }
       if (parser.value() === undefined) {
         throw new Error('DWS authorization did not provide a trusted DingTalk login link.');
       }
-      const current = await status(signal);
       if (!current.authenticated) throw new Error('DWS authorization finished without a valid login.');
       return current;
     },

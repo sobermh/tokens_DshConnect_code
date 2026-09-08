@@ -6,7 +6,7 @@ export function registerDingtalkTools(ctx, service) {
   ctx.tools.register(defineTool({
     name: 'dingtalk_connect',
     description: 'Default connection tool for an unqualified request such as “帮我连接钉钉”. Connects a '
-      + 'DingTalk personal account through the official DWS device authorization flow without asking the user '
+      + 'DingTalk personal account through the official DWS local-browser OAuth flow without asking the user '
       + 'to choose an account type. '
       + 'Returns a complete one-click login.dingtalk.com link; show it to the user, then call dingtalk_status '
       + 'until connected. Reuses an existing valid login unless force=true.',

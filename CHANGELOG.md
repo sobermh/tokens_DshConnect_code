@@ -6,6 +6,14 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+### Fixed / 修复
+
+- 钉钉个人授权改用 DWS 为桌面本机设计的 loopback OAuth，不再误用 SSH/无头环境的设备流；网页 OAuth 完成后可继续处理组织 CLI 数据访问申请，并只接受回调到 `127.0.0.1` 的钉钉官方一键链接。
+  DingTalk personal authorization now uses DWS loopback OAuth designed for a local desktop instead of its SSH/headless device flow; after OAuth it can continue the organization CLI data-access application, while only official DingTalk links that redirect to a `127.0.0.1` callback are accepted.
+
+- 钉钉个人授权现在会在 DWS 登录命令异常退出后复查已保存的登录态；若平台确实拒绝授权，则展示经过凭据和授权链接脱敏的真实原因，不再只报告无信息量的退出码或错误地要求重复扫码。
+  DingTalk personal authorization now rechecks the persisted DWS session after an abnormal login exit; when the platform genuinely rejects authorization, it reports the credential- and link-redacted upstream reason instead of only an opaque exit code or incorrectly asking the user to scan again.
+
 ## [2.5.0] - 2026-08-28
 
 ### Added / 新增

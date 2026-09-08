@@ -39,7 +39,7 @@
 
 飞书使用统一的「应用」资源：App ID 与 App Secret 只保存一份，飞书机器人和个人 OAuth 可以复用同一个应用，也可以明确创建独立应用。机器人运行时、聊天会话和个人 OAuth Token 始终分开；移除机器人不会退出个人授权，解除个人授权也不会停止机器人。升级时会按 App ID 导入旧配置，相同 App ID 自动归并，不同 App ID 保持为独立应用。
 
-钉钉个人授权使用官方 [DingTalk Workspace CLI](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli)（DWS）的托管 OAuth。连接中心会生成带授权码的 `login.dingtalk.com` 一键链接，无需填写 AppKey 或 AppSecret；授权完成后自动安装校验过的 DWS 与官方 `dingtalk-*` Skills。钉钉 IM 机器人仍由独立的 Stream 通道管理，不与个人账号授权混用凭据或生命周期。
+钉钉个人授权使用官方 [DingTalk Workspace CLI](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli)（DWS）的本机回调 OAuth。连接中心会生成 `login.dingtalk.com` 一键链接，无需填写 AppKey 或 AppSecret；本机回调会继续处理组织 CLI 数据访问申请，授权完成后自动安装校验过的 DWS 与官方 `dingtalk-*` Skills。钉钉 IM 机器人仍由独立的 Stream 通道管理，不与个人账号授权混用凭据或生命周期。
 
 Connect IM bots to DeepSeek Harness and authorize personal Feishu and DingTalk accounts through OAuth. One Connection Center entry manages nine multi-bot IM channels and both personal authorizations.
 

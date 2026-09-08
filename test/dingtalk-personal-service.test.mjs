@@ -11,7 +11,7 @@ import {
   createDingtalkPersonalService,
 } from '../plugin-src/host/connectors/dingtalk-personal/service.js';
 
-const AUTH_URL = 'https://login.dingtalk.com/oauth2/device/verify.htm?user_code=NFSZ-GHSD';
+const AUTH_URL = 'https://login.dingtalk.com/oauth2/auth?client_id=ding_test_client&redirect_uri=http%3A%2F%2F127.0.0.1%3A54321%2Fcallback&response_type=code&scope=openid+corpid&prompt=consent';
 
 function liveStatus(overrides = {}) {
   return {
@@ -92,6 +92,37 @@ test('DingTalk personal service owns connection state and keeps the DWS profile 
   assert.equal(disconnected.authenticated, false);
   assert.ok(calls.some((entry) => Array.isArray(entry)
     && entry[0] === 'logout' && entry[1] === 'corp:user'));
+  service.dispose();
+});
+
+test('DingTalk personal service keeps one authorization flow for concurrent connect calls', async () => {
+  let finishLogin;
+  let loginCalls = 0;
+  const dws = {
+    async status() { return liveStatus(); },
+    async provision() {},
+    async login(_signal, onAuthorizeUrl) {
+      loginCalls += 1;
+      onAuthorizeUrl(AUTH_URL);
+      return new Promise((resolve) => { finishLogin = resolve; });
+    },
+  };
+  const service = createDingtalkPersonalService({
+    dws,
+    ensureSkills: async () => ({ count: 0, version: '1.0.61' }),
+    inspectSkills: async () => ({ available: true, count: 0, names: [], collisions: [] }),
+  });
+
+  assert.equal(service.startConnect(false), true);
+  await service.waitForAuthorizationStart(1_000);
+  assert.equal(service.startConnect(false), false);
+  assert.equal(loginCalls, 1);
+
+  const progressed = service.waitForProgress(1_000);
+  finishLogin(liveStatus({ authenticated: true, tokenValid: true, userName: 'Sean' }));
+  await progressed;
+  assert.equal((await service.status()).phase, 'connected');
+  assert.equal(loginCalls, 1);
   service.dispose();
 });
 
