@@ -5,9 +5,10 @@ import { homedir, tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const PACKAGE_NAME = '@tokens/dsh-connect';
+const PACKAGE_NAME = '@tokensapi/dsh-connect';
 const DEFAULT_SOURCE = 'github:sobermh/tokens_DshConnect_code';
 const LEGACY_PACKAGES = [
+  '@tokens/dsh-connect',
   '@tokens/dsh-im',
   '@tokens/dsh-feishu-connect',
   '@tokens/dsh-connect-ui',

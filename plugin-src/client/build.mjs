@@ -7,7 +7,7 @@ import { build } from 'esbuild';
 const sourceDirectory = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(sourceDirectory, '../..');
 const outputPath = resolve(packageRoot, 'lib/client.js');
-const loaderId = process.env.DSH_CONNECT_CLIENT_ID ?? '@tokens/dsh-connect';
+const loaderId = process.env.DSH_CONNECT_CLIENT_ID ?? '@tokensapi/dsh-connect';
 
 const result = await build({
   entryPoints: [resolve(sourceDirectory, 'index.js')],

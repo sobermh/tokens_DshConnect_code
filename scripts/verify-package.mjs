@@ -51,10 +51,10 @@ const [client, host, patch, manifestText, lockText, hostSource, clientSource, ex
 const manifest = JSON.parse(manifestText);
 const lock = JSON.parse(lockText);
 
-if (manifest.name !== '@tokens/dsh-connect'
-  || lock.name !== '@tokens/dsh-connect'
-  || lock.packages?.['']?.name !== '@tokens/dsh-connect') {
-  throw new Error('package metadata must use the @tokens/dsh-connect identity');
+if (manifest.name !== '@tokensapi/dsh-connect'
+  || lock.name !== '@tokensapi/dsh-connect'
+  || lock.packages?.['']?.name !== '@tokensapi/dsh-connect') {
+  throw new Error('package metadata must use the @tokensapi/dsh-connect identity');
 }
 if (manifest.version !== lock.version || manifest.version !== lock.packages?.['']?.version) {
   throw new Error('package manifest and lockfile versions must match');
@@ -94,7 +94,7 @@ if (forbiddenDshLockPaths.length > 0) {
   );
 }
 
-if (!client.includes('id: "@tokens/dsh-connect"')) {
+if (!client.includes('id: "@tokensapi/dsh-connect"')) {
   throw new Error('client bundle does not register the dsh-connect loader id');
 }
 if (!client.includes('id: "connect"')
@@ -165,7 +165,7 @@ if (/@xmanrui\/dsh-(?:feishu|weixin|dingtalk)/.test(
   throw new Error('source or package metadata still depends on an external channel plugin');
 }
 if (!patch.includes('id: tokens-connect')
-  || !patch.includes("name: '@tokens/dsh-connect'")
+  || !patch.includes("name: '@tokensapi/dsh-connect'")
   || /dsh-(?:feishu|weixin|dingtalk)/.test(patch)) {
   throw new Error('bundle patch must activate only dsh-connect');
 }

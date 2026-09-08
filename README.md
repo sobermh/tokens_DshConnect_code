@@ -31,7 +31,7 @@
 
 ---
 
-> 本仓库基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 演进，运行包名为 `@tokens/dsh-connect`。原项目作者、历史贡献和 MIT 许可证完整保留；当前版本将 IM 机器人与飞书、钉钉个人账号授权整合为 TokensHarness 的统一连接中心。
+> 本仓库基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 演进，运行包名为 `@tokensapi/dsh-connect`。原项目作者、历史贡献和 MIT 许可证完整保留；当前版本将 IM 机器人与飞书、钉钉个人账号授权整合为 TokensHarness 的统一连接中心。
 
 ## 简介
 
@@ -88,7 +88,7 @@ Connect IM bots to DeepSeek Harness and authorize personal Feishu and DingTalk a
 推荐从 npm 安装已发布的稳定版本：
 
 ```sh
-dsh plugin --profile web add -w @tokens/dsh-connect@latest
+dsh plugin --profile web add -w @tokensapi/dsh-connect@latest
 ```
 
 重启 `dsh web`，然后打开「设置 → 连接中心」。桌面端本地测试时，把 profile 改为 `desktop`，也可以把包名替换为本机 `.tgz` 的绝对路径。
@@ -101,7 +101,7 @@ npx -y github:sobermh/tokens_DshConnect_code install
 
 GitHub 源安装会直接拉取并构建 Git 依赖；pnpm 10 及以上版本可能要求先在 profile 的 `pnpm-workspace.yaml` 中允许该依赖执行构建脚本。普通用户建议优先使用 npm 稳定版。
 
-安装后，在对应渠道页面按照内置引导完成扫码、凭据配置或个人账号 OAuth。钉钉个人账号只需点击连接中心生成的一键授权链接；首次使用会从官方 GitHub Release 下载并校验 DWS 及其 Skills。所有 Secret 和 Token 只提交给本机 Harness Host 或由 DWS 写入本机受保护存储；状态接口和机器人列表不会回传这些凭据。升级安装器会移除旧的 `@tokens/dsh-im`、`@tokens/dsh-feishu-connect` 和 `@tokens/dsh-connect-ui` 包，同时保留原有机器人绑定和 `dsh-feishu` 个人授权数据。
+安装后，在对应渠道页面按照内置引导完成扫码、凭据配置或个人账号 OAuth。钉钉个人账号只需点击连接中心生成的一键授权链接；首次使用会从官方 GitHub Release 下载并校验 DWS 及其 Skills。所有 Secret 和 Token 只提交给本机 Harness Host 或由 DWS 写入本机受保护存储；状态接口和机器人列表不会回传这些凭据。升级安装器会移除旧的 `@tokens/dsh-connect`、`@tokens/dsh-im`、`@tokens/dsh-feishu-connect` 和 `@tokens/dsh-connect-ui` 包，同时保留原有机器人绑定和 `dsh-feishu` 个人授权数据。
 
 如果本机必须通过正向代理访问飞书，请在启动 `dsh web` 前把 `HTTPS_PROXY` 设置为包含协议的 HTTP 代理 URL（例如 `http://proxy:8080`；也支持小写 `https_proxy`，并兼容使用 `HTTP_PROXY` 作为回退），修改后重启 Host。飞书注册和凭据验证会复用 SDK 的代理感知 HTTP 客户端，消息长连接会显式通过这个代理建立 WebSocket；长连接目前不读取 `ALL_PROXY` 或 `NO_PROXY`。
 

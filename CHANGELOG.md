@@ -6,6 +6,13 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-09-08
+
+### Changed / 变更
+
+- npm 正式分发包迁移为 `@tokensapi/dsh-connect`；发布前自动执行测试、构建与包校验，升级安装器会移除未发布的旧包身份 `@tokens/dsh-connect`。
+  The official npm package is now `@tokensapi/dsh-connect`; publishing automatically runs tests, builds runtime artifacts, verifies the package, and the upgrade installer removes the unpublished legacy identity `@tokens/dsh-connect`.
+
 ### Fixed / 修复
 
 - 钉钉个人授权改用 DWS 为桌面本机设计的 loopback OAuth，不再误用 SSH/无头环境的设备流；网页 OAuth 完成后可继续处理组织 CLI 数据访问申请，并只接受回调到 `127.0.0.1` 的钉钉官方一键链接。
@@ -351,7 +358,8 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/xmanrui/dsh-im/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...HEAD
+[2.6.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.4.4...v2.6.1
 [2.3.0]: https://github.com/xmanrui/dsh-im/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/xmanrui/dsh-im/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/xmanrui/dsh-im/compare/v2.1.0...v2.2.0

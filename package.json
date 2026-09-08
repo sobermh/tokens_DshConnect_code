@@ -1,6 +1,6 @@
 {
-  "name": "@tokens/dsh-connect",
-  "version": "2.6.0",
+  "name": "@tokensapi/dsh-connect",
+  "version": "2.6.1",
   "description": "统一管理九种 IM 机器人及飞书、钉钉个人账号授权，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",
@@ -64,9 +64,6 @@
     "bin",
     "cordis.patch.yml",
     "lib",
-    "plugin-src",
-    "scripts",
-    "src",
     "LICENSE",
     "README.md",
     "README.en.md",
@@ -90,7 +87,9 @@
   "scripts": {
     "build": "node plugin-src/client/build.mjs && node plugin-src/host/build.mjs",
     "test": "node --test test/*.test.mjs test/channels/*/*.test.mjs",
-    "check": "npm test && npm run build && node scripts/verify-package.mjs"
+    "check": "npm test && npm run build && node scripts/verify-package.mjs",
+    "prepack": "npm run build && node scripts/verify-package.mjs",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=22.19"
