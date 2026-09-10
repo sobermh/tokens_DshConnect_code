@@ -1,3 +1,5 @@
+import { callManagementRpc } from '../management-rpc.mjs';
+
 import {
   DingtalkLogoGlyph,
   DiscordLogoGlyph,
@@ -8,6 +10,7 @@ import {
   WecomLogoGlyph,
   WeixinLogoGlyph,
   WhatsappLogoGlyph,
+  IMessageLogoGlyph,
 } from './channel-logos.js';
 import { DINGTALK_RPC_CHANNEL } from './channels/dingtalk/api.js';
 import { DingtalkSettingsTab } from './channels/dingtalk/index.js';
@@ -35,6 +38,9 @@ import { installWeixinStyles } from './channels/weixin/styles.js';
 import { WHATSAPP_RPC_CHANNEL } from './channels/whatsapp/api.js';
 import { WhatsappSettingsTab } from './channels/whatsapp/index.js';
 import { installWhatsappStyles } from './channels/whatsapp/styles.js';
+import { IMESSAGE_RPC_CHANNEL } from './channels/imessage/api.js';
+import { IMessageSettingsTab } from './channels/imessage/index.js';
+import { installIMessageStyles } from './channels/imessage/styles.js';
 import { DINGTALK_PERSONAL_RPC_CHANNEL } from './connectors/dingtalk-personal/api.js';
 import {
   DingtalkPersonalSettings,
@@ -152,6 +158,17 @@ export const CONNECTION_DEFINITIONS = Object.freeze([
     installStyles: installWhatsappStyles,
   }),
   connection({
+    id: 'imessage',
+    label: 'iMessage',
+    groupId: 'im-bots',
+    rpcKey: 'imessageRpcCall',
+    rpcChannel: IMESSAGE_RPC_CHANNEL,
+    Component: IMessageSettingsTab,
+    LogoGlyph: IMessageLogoGlyph,
+    logoClass: 'dim-logoIMessage',
+    installStyles: installIMessageStyles,
+  }),
+  connection({
     id: 'feishu-personal',
     label: '飞书个人账号',
     groupId: 'authorizations',
@@ -205,9 +222,22 @@ export function connectionRpcCallsFromProps(props) {
 }
 
 export function createConnectionRpcCalls(connectionApi) {
-  return Object.fromEntries(CONNECTION_DEFINITIONS.map(({ rpcKey, rpcChannel }) => [
+  return Object.fromEntries(CONNECTION_DEFINITIONS.map(({ groupId, rpcKey, rpcChannel }) => [
     rpcKey,
-    (endpoint, payload, signal) => connectionApi.rpc.call(rpcChannel, endpoint, payload, signal),
+    groupId === 'im-bots'
+      ? (endpoint, payload, signal) => callManagementRpc(
+          connectionApi,
+          rpcChannel,
+          endpoint,
+          payload,
+          signal,
+        )
+      : (endpoint, payload, signal) => connectionApi.rpc.call(
+          rpcChannel,
+          endpoint,
+          payload,
+          signal,
+        ),
   ]));
 }
 

@@ -35,13 +35,13 @@
 
 ## 简介
 
-通过扫码、App Manifest 或已有机器人凭据把 IM 机器人接入 DeepSeek Harness，并通过 OAuth 连接飞书或钉钉个人账号。一个插件、一个「连接中心」设置入口，分为「IM机器人」和「应用授权」两类，统一管理九种 IM 渠道与两个个人账号连接。**每个 IM 渠道都支持接入多个机器人**，各机器人的连接状态、工作区和会话绑定彼此独立。
+通过扫码、App Manifest 或已有机器人凭据把 IM 机器人接入 DeepSeek Harness，并通过 OAuth 连接飞书或钉钉个人账号。一个插件、一个「连接中心」设置入口，分为「IM机器人」和「应用授权」两类，统一管理十种 IM 渠道与两个个人账号连接。**每个 IM 渠道都支持接入多个机器人**，各机器人的连接状态、工作区和会话绑定彼此独立。
 
 飞书使用统一的「应用」资源：App ID 与 App Secret 只保存一份，飞书机器人和个人 OAuth 可以复用同一个应用，也可以明确创建独立应用。机器人运行时、聊天会话和个人 OAuth Token 始终分开；移除机器人不会退出个人授权，解除个人授权也不会停止机器人。升级时会按 App ID 导入旧配置，相同 App ID 自动归并，不同 App ID 保持为独立应用。
 
 钉钉个人授权使用官方 [DingTalk Workspace CLI](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli)（DWS）的本机回调 OAuth。连接中心会生成 `login.dingtalk.com` 一键链接，无需填写 AppKey 或 AppSecret；本机回调会继续处理组织 CLI 数据访问申请，授权完成后自动安装校验过的 DWS 与官方 `dingtalk-*` Skills。钉钉 IM 机器人仍由独立的 Stream 通道管理，不与个人账号授权混用凭据或生命周期。
 
-Connect IM bots to DeepSeek Harness and authorize personal Feishu and DingTalk accounts through OAuth. One Connection Center entry manages nine multi-bot IM channels and both personal authorizations.
+Connect IM bots to DeepSeek Harness and authorize personal Feishu and DingTalk accounts through OAuth. One Connection Center entry manages ten multi-bot IM channels and both personal authorizations.
 
 ## 界面
 
@@ -60,10 +60,11 @@ Connect IM bots to DeepSeek Harness and authorize personal Feishu and DingTalk a
 | Telegram | 使用 @BotFather 生成的 Bot Token | Bot API 长轮询；默认私聊直接响应、群聊被提及或回复时响应，也可为每个机器人独立启用私聊白名单安全模式；私聊通过 Rich Message Draft 流式预览并持久化最终富消息，群聊和 Topic 原位完成占位消息，平台不支持时回退为普通文字 |
 | Discord | 使用 Developer Portal 生成的 Bot Token | Gateway v10 长连接；私信直接回复；服务器文字/公告频道首次 @ 后创建原生 Thread，后续在线程中无需重复 @，并通过编辑消息流式显示回答 |
 | WhatsApp | 使用手机 WhatsApp 扫码关联设备 | WhatsApp Web 长连接；默认仅响应账号自聊，也可切换到指定联系人或开放响应模式；显示已读和“正在输入”，再发送最终回答 |
+| iMessage | 在 macOS 上授权 Messages.app 的本机访问权限 | 原生 macOS Messages 文本收发；读取本机消息数据库并通过 AppleScript 回复 |
 
 其他 IM 平台可继续按同一渠道适配器结构接入。
 
-九个内置渠道均支持把 JPEG、PNG、WebP 图片，以及以图片文件方式发送的 GIF，连同可选文字说明发送给 Harness；单张图片上限为 5 MB，单条消息中的图片总大小上限为 20 MB。飞书下载用户消息中的图片或文件需要租户权限 `im:message:readonly`，确认页将其显示为“获取单聊、群组消息”；飞书目前没有为该下载接口提供仅限图片的更窄权限。扫码新建的应用会默认申请；已有或手动绑定的应用可私聊机器人执行 `/repair`，或在插件页面点击“补全权限”，扫码增量补全该权限、上传机器人图片或文件所需的 `im:resource`，以及卡片回调。
+九个支持媒体的内置渠道均支持把 JPEG、PNG、WebP 图片，以及以图片文件方式发送的 GIF，连同可选文字说明发送给 Harness；单张图片上限为 5 MB，单条消息中的图片总大小上限为 20 MB。iMessage 当前仅支持文本。飞书下载用户消息中的图片或文件需要租户权限 `im:message:readonly`，确认页将其显示为“获取单聊、群组消息”；飞书目前没有为该下载接口提供仅限图片的更窄权限。扫码新建的应用会默认申请；已有或手动绑定的应用可私聊机器人执行 `/repair`，或在插件页面点击“补全权限”，扫码增量补全该权限、上传机器人图片或文件所需的 `im:resource`，以及卡片回调。
 
 ### 结果文件与图片回传
 
@@ -207,11 +208,11 @@ Slack 桌面端若未注册同名的原生 Slash Command，会拦截直接以 `/
 
 ## 设计
 
-- Harness 中只注册一个「连接中心」设置页，按「IM机器人」和「应用授权」展示九个 IM 渠道与飞书、钉钉两个个人账号连接；
-- 九个渠道及两个个人连接的 Host、客户端与运行时源码都在本仓库维护，不依赖外部独立插件；
+- Harness 中只注册一个「连接中心」设置页，按「IM机器人」和「应用授权」展示十个 IM 渠道与飞书、钉钉两个个人账号连接；
+- 十个渠道及两个个人连接的 Host、客户端与运行时源码都在本仓库维护，不依赖外部独立插件；
 - 设置页跟随 DeepSeek Harness 的语言选择，在中文和 English 之间即时切换；机器人发出的聊天消息跟随 Host 的 `language` 配置（默认中文；设为 `en` 即为英文），中文始终为兜底，未收录的文案原样输出；
-- 左侧使用原 dsh-im 的 Logo 与卡片布局切换微信、飞书机器人、钉钉、企业微信、QQ、Slack、Telegram、Discord、WhatsApp、飞书个人账号和钉钉个人账号；
-- 九个 IM 渠道保持独立的 RPC、凭据、连接监督和会话映射；飞书个人连接保留 `dsh-feishu` profile，钉钉个人连接在当前 DSH profile 内使用隔离的 DWS 配置，并通过一个受限 `dws` 工具承载官方 Skills 中的业务命令；
+- 左侧使用原 dsh-im 的 Logo 与卡片布局切换微信、飞书机器人、钉钉、企业微信、QQ、Slack、Telegram、Discord、WhatsApp、iMessage、飞书个人账号和钉钉个人账号；
+- 十个 IM 渠道保持独立的 RPC、凭据、连接监督和会话映射；飞书个人连接保留 `dsh-feishu` profile，钉钉个人连接在当前 DSH profile 内使用隔离的 DWS 配置，并通过一个受限 `dws` 工具承载官方 Skills 中的业务命令；
 - 飞书应用注册表统一保存非敏感应用元数据和消费者关系，每个应用只对应一份受保护的 App Secret；机器人与个人 OAuth 分别附加或解除，不级联删除另一侧；
 - 浏览器只获得二维码、Manifest、脱敏状态，以及用户为当前 Telegram 或 WhatsApp 机器人主动保存的访问模式和白名单标识；手动输入的 Secret 或 Token 仅单向提交给本机 Host，任何 RPC 响应都不会返回 App Secret、`bot_token`、钉钉 `client_secret`、企业微信 Secret、QQ `app_secret`、Slack Bot/App Token、Telegram/Discord Bot Token、WhatsApp 关联设备密钥，或从平台消息中观察到的其他原始用户标识。
 
@@ -225,15 +226,17 @@ node bin/dsh-connect.mjs install --source .
 
 `npm run check` 运行单元测试、构建 Host/Client 产物，并验证发布包不包含凭据或独立渠道设置页注册。
 
-IM 管理 RPC 默认仅接受回环浏览器。如果 Web profile 在受信任的局域网内对外提供服务，可在该 profile 的 `cordis.patch.yml` 中显式开放给 Connection 已信任的 Host authority：
+IM 管理接口默认沿用 Harness 的浏览器认证和 Host／Origin 信任检查。只要 Harness 已允许并认证当前局域网访问，便可直接查看和配置 IM 机器人，无需额外修改连接中心配置。
+
+如需将 IM 管理额外限制为仅本机访问，可在该 profile 的 `cordis.patch.yml` 中设置：
 
 ```yaml
 - id: tokens-connect
   config:
-    rpcAuthority: trusted-host
+    rpcAuthority: loopback
 ```
 
-`trusted-host` 只复用 Harness 的 Host／Origin 防护，不是用户认证。启用后，能访问该局域网地址的人也能查看机器人状态、扫码或提交应用凭据、重连和删除机器人；只应在可信网络中使用。
+`rpcAuthority` 默认为 `trusted-host`；显式设置 `loopback` 会额外要求回环 Host 和 Origin。`trusted-host` 只复用 Harness 的 Host／Origin 防护，不是用户认证；能访问该局域网地址的人也能查看机器人状态、扫码或提交应用凭据、重连和删除机器人，因此只应在可信网络中使用。
 
 ### 聊天消息语言
 

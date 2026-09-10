@@ -6,6 +6,17 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+### Fixed / 修复
+
+- 同步上游 IM 管理信任策略：默认沿用 Harness 的浏览器认证与 Host／Origin 校验，仍可显式设置 `rpcAuthority: loopback` 限制为本机访问。
+  Synced the upstream IM management trust policy: browser authentication and Host/Origin checks from Harness are used by default, while `rpcAuthority: loopback` remains available for local-only access.
+
+- 同步 iMessage 自聊防循环修复：只处理入站副本，机器人回复写入 `🤖 DSH` 标记，并在重启后继续过滤机器人回声。
+  Synced the iMessage self-chat loop protection: process only inbound copies, mark bot replies with `🤖 DSH`, and keep filtering bot echoes after restart.
+
+- 增加消息失败诊断回归测试，覆盖 Harness、模型、渠道发送、Preset 和附件权限错误的稳定错误码与脱敏参考号。
+  Added regression coverage for stable, redacted message-failure diagnostics across Harness, model, channel delivery, Preset, and artifact-permission errors.
+
 ## [2.6.1] - 2026-09-08
 
 ### Changed / 变更

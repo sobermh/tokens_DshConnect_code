@@ -109,6 +109,7 @@ test('Host composes message channels and service connectors inside one plugin co
     applyTelegram: async (ctx, config) => calls.push(['telegram', ctx, config]),
     applyDiscord: async (ctx, config) => calls.push(['discord', ctx, config]),
     applyWhatsapp: async (ctx, config) => calls.push(['whatsapp', ctx, config]),
+    applyIMessage: async (ctx, config) => calls.push(['imessage', ctx, config]),
     applyFeishuPersonal: async (ctx, config) => calls.push(['feishuPersonal', ctx, config]),
     applyDingtalkPersonal: async (ctx, config) => calls.push(['dingtalkPersonal', ctx, config]),
   });
@@ -135,7 +136,6 @@ test('Host composes message channels and service connectors inside one plugin co
     'connection',
     'credentials',
     'tools',
-    'webServer',
     'typertGateway',
   ]);
   assert.deepEqual(calls, [
@@ -148,6 +148,7 @@ test('Host composes message channels and service connectors inside one plugin co
     ['telegram', ctx, { ...config.telegram, rpcAuthority: 'trusted-host' }],
     ['discord', ctx, { ...config.discord, rpcAuthority: 'trusted-host' }],
     ['whatsapp', ctx, { ...config.whatsapp, rpcAuthority: 'trusted-host' }],
+    ['imessage', ctx, { ...config.imessage, rpcAuthority: 'trusted-host' }],
     ['feishuPersonal', ctx, {
       appIdEnv: 'FEISHU_APP_ID',
       appSecretEnv: 'FEISHU_APP_SECRET',
@@ -180,11 +181,42 @@ test('Host passes one shared Feishu application service to IM and personal autho
     applyTelegram: noOp,
     applyDiscord: noOp,
     applyWhatsapp: noOp,
+    applyIMessage: noOp,
   });
 
   await plugin.apply({ credentials: { marker: 'credentials' } }, {});
 
   assert.deepEqual(calls, [['im', service], ['personal', service]]);
+});
+
+test('Host waits for apiProxy on legacy Harness and Controllers on modern Harness', async () => {
+  for (const [modern, expected] of [
+    [false, ['apiProxy']],
+    [true, ['sessionController', 'workspaceController']],
+  ]) {
+    const injections = [];
+    const calls = [];
+    const plugin = createImHostPlugin(Object.fromEntries(CHANNELS.map(([channel, applyName]) => [
+      applyName,
+      async () => calls.push(channel),
+    ]).concat([['createFeishuApplicationService', async () => undefined]])));
+    const ctx = {
+      credentials: {},
+      typertGateway: modern ? { stream() {} } : { invoke() {} },
+      inject(dependencies, callback) {
+        injections.push(dependencies);
+        if (dependencies.includes('tools')) return {};
+        return {
+          then(resolve, reject) {
+            Promise.resolve(callback(ctx)).then(resolve, reject);
+          },
+        };
+      },
+    };
+    await plugin.apply(ctx, {});
+    assert.deepEqual(injections[0], expected);
+    assert.deepEqual(calls, CHANNELS.map(([channel]) => channel));
+  }
 });
 
 const CHANNELS = [
@@ -197,6 +229,7 @@ const CHANNELS = [
   ['telegram', 'applyTelegram'],
   ['discord', 'applyDiscord'],
   ['whatsapp', 'applyWhatsapp'],
+  ['imessage', 'applyIMessage'],
   ['feishuPersonal', 'applyFeishuPersonal'],
   ['dingtalkPersonal', 'applyDingtalkPersonal'],
 ];

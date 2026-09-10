@@ -1,3 +1,4 @@
+import { registerManagementRpc } from '../../../management-rpc.mjs';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 import { publicConnectionTestResult } from '../../../../src/channels/shared/connection-test.mjs';
 import {
@@ -170,10 +171,7 @@ export function createTokenBotRpcHandler(controller, { channel }) {
 }
 
 export function installTokenBotRpc(ctx, controller, { channel, rpcChannel, authority }) {
-  if (!ctx?.connection?.rpc || typeof ctx.connection.rpc.handle !== 'function') {
-    throw new TypeError('DSH Host Connection RPC is required');
-  }
-  return ctx.connection.rpc.handle(
+  return registerManagementRpc(ctx,
     rpcChannel,
     createTokenBotRpcHandler(controller, { channel }),
     { authority: resolveRpcAuthority(authority) },

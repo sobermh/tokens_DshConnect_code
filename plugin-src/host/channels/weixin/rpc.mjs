@@ -1,3 +1,4 @@
+import { registerManagementRpc } from '../../../management-rpc.mjs';
 import QRCode from 'qrcode';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 import {
@@ -227,10 +228,7 @@ export function createWeixinRpcHandler(controller, { encodeQr = qrDataUrl } = {}
 }
 
 export function installWeixinRpc(ctx, controller, options, authority) {
-  if (!ctx?.connection?.rpc || typeof ctx.connection.rpc.handle !== 'function') {
-    throw new TypeError('DSH Host Connection RPC is required');
-  }
-  return ctx.connection.rpc.handle(
+  return registerManagementRpc(ctx,
     WEIXIN_RPC_CHANNEL,
     createWeixinRpcHandler(controller, options),
     { authority: resolveRpcAuthority(authority) },

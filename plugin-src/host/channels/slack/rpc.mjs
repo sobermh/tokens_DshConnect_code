@@ -1,3 +1,4 @@
+import { registerManagementRpc } from '../../../management-rpc.mjs';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 import { publicConnectionTestResult } from '../../../../src/channels/shared/connection-test.mjs';
 import {
@@ -171,10 +172,7 @@ export function createSlackRpcHandler(controller) {
 }
 
 export function installSlackRpc(ctx, controller, authority) {
-  if (!ctx?.connection?.rpc || typeof ctx.connection.rpc.handle !== 'function') {
-    throw new TypeError('DSH Host Connection RPC is required');
-  }
-  return ctx.connection.rpc.handle(
+  return registerManagementRpc(ctx,
     SLACK_RPC_CHANNEL,
     createSlackRpcHandler(controller),
     { authority: resolveRpcAuthority(authority) },

@@ -702,7 +702,9 @@ test('shared text bridge reports a safe native-file download failure', async () 
     files: [{ name: 'failed.txt', load: async () => Buffer.from('unused') }],
   }));
 
-  assert.deepEqual(sent, ['文件下载失败，请重新发送后再试。']);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /^文件下载失败，请重新发送后再试。/);
+  assert.match(sent[0], /错误码：INPUT_INVALID；参考号：MF-[A-F0-9]{8}$/);
   assert.doesNotMatch(sent[0], /secret|token|https:/i);
 });
 

@@ -1,3 +1,4 @@
+import { managementFetch } from '../../fixtures/management-rpc.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -38,12 +39,10 @@ async function rpcFixture(controller) {
   let disposed = false;
   const ctx = {
     connection: {
-      rpc: {
-        handle(channel, handler, options) {
-          registration = { channel, handler, options };
-          return async () => { disposed = true; };
-        },
-      },
+      fetch: managementFetch((channel, handler, options) => {
+        registration = { channel, handler, options };
+        return async () => { disposed = true; };
+      }),
     },
   };
   const dispose = await apply(ctx, { controller });
@@ -54,7 +53,7 @@ async function rpcFixture(controller) {
   };
 }
 
-test('Host plugin registers the real rc.6 Connection RPC shape as loopback-only', async () => {
+test('Host plugin accepts Harness-admitted LAN requests on the public management Fetch route by default', async () => {
   const controller = {
     status: async () => status(),
     startRegistration: async () => status(),
@@ -64,7 +63,10 @@ test('Host plugin registers the real rc.6 Connection RPC shape as loopback-only'
   const fx = await rpcFixture(controller);
 
   assert.equal(fx.registration.channel, '/feishu');
-  assert.deepEqual(fx.registration.options, { authority: 'loopback' });
+  assert.equal(fx.registration.options.path, '/api/dsh-im/feishu');
+  assert.equal((await fx.registration.handler(FEISHU_ENDPOINTS.status, {}, undefined, {
+    host: '192.168.1.100:3080', origin: 'http://192.168.1.100:3080',
+  })).ok, true);
   const result = await fx.registration.handler(FEISHU_ENDPOINTS.status, {}, signal());
   assert.equal(result.ok, true);
   assert.equal(result.value.state, 'disconnected');
@@ -1141,7 +1143,7 @@ test('DSH credential adapter stores refs off the browser plane and clears them',
   assert.equal(await store.configured(), false);
 });
 
-test('production assembly needs only ctx credentials and the active DSH webServer', async () => {
+test('production assembly uses ctx credentials and the active Host apiProxy without a webServer', async () => {
   const constructed = {};
   const httpInstance = { request: async () => ({}) };
   const wsAgent = {
@@ -1174,9 +1176,10 @@ test('production assembly needs only ctx credentials and the active DSH webServe
     async close() { constructed.closed = true; }
   }
   const credentials = {};
+  const apiProxy = {};
   const production = await createProductionController({
     credentials,
-    webServer: { port: 43123, host: '127.0.0.1' },
+    apiProxy,
     logger: console,
   }, {
     dshHome: '/tmp/dsh-feishu-host-test',
@@ -1209,7 +1212,8 @@ test('production assembly needs only ctx credentials and the active DSH webServe
   assert.equal(constructed.verifyOptions.httpInstance, httpInstance);
   assert.equal(constructed.wsAgentCreated, 1);
   assert.equal(constructed.wsProxyUrl, 'http://proxy.test:8080');
-  assert.equal(String(constructed.harness.baseUrl), 'http://127.0.0.1:43123/');
+  assert.equal(constructed.harness.apiProxy, apiProxy);
+  assert.equal(Object.hasOwn(constructed.harness, 'baseUrl'), false);
   assert.equal(constructed.harness.autostart, false);
   assert.match(constructed.configPath, /integrations[\\/]dsh-feishu[\\/]config\.json$/);
 
@@ -1308,7 +1312,7 @@ test('a corrupt legacy state file cannot prevent a healthy v2 bot from starting'
       async set(ref, value) { secrets.set(ref, value); },
       async unset(ref) { secrets.delete(ref); },
     },
-    webServer: { port: 43124 },
+    apiProxy: {},
     logger: console,
   }, { dataDir, workspace: dataDir }, {
     lark: { registerApp: async () => ({}) },

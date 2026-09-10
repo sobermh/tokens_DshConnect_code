@@ -1,3 +1,4 @@
+import { registerManagementRpc } from '../../../management-rpc.mjs';
 import QRCode from 'qrcode';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 import { publicWorkspaceError, SET_WORKSPACE_ENDPOINT, validWorkspacePayload } from '../shared/workspace-rpc.mjs';
@@ -279,10 +280,7 @@ export function createDingtalkRpcHandler(controller, { encodeQr = qrDataUrl } = 
 }
 
 export function installDingtalkRpc(ctx, controller, options, authority) {
-  if (!ctx?.connection?.rpc || typeof ctx.connection.rpc.handle !== 'function') {
-    throw new TypeError('DSH Host Connection RPC is required');
-  }
-  return ctx.connection.rpc.handle(
+  return registerManagementRpc(ctx,
     DINGTALK_RPC_CHANNEL,
     createDingtalkRpcHandler(controller, options),
     { authority: resolveRpcAuthority(authority) },

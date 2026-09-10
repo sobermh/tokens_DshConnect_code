@@ -10,7 +10,11 @@ import {
   EMPTY_AGENT_PRESET_CATALOG,
 } from '../../agent-preset.js';
 import { useWorkspaceSnapshotFence } from '../../workspace-snapshot-fence.js';
-import { BotStatusMeta, ChannelListHeading } from '../../channel-card-meta.js';
+import {
+  BotStatusMeta,
+  ChannelListHeading,
+  LastMessageErrorSummary,
+} from '../../channel-card-meta.js';
 
 const Button = React.forwardRef(function Button(
   { children, kind = 'secondary', className = '', ...props },
@@ -121,6 +125,10 @@ export function createTokenChannelSettings(definition) {
                 disabled: Boolean(busy),
               }, '移除接入')),
             summary ? h('div', { className: 'ddt-summary dim-cardSummary' }, summary) : null,
+            account.lastMessageError ? h(LastMessageErrorSummary, {
+              className: 'ddt-summary',
+              error: account.lastMessageError,
+            }) : null,
             testNotice ? h('div', {
               className: 'ddt-summary dim-cardFeedback',
               role: 'status',
@@ -138,6 +146,7 @@ export function createTokenChannelSettings(definition) {
     const [model, setModel] = React.useState({
       phase: 'loading', bots: [], totals: { configured: 0, connected: 0 }, error: null,
       agentPresetCatalog: EMPTY_AGENT_PRESET_CATALOG,
+      permissions: null,
     });
     const [credentialOpen, setCredentialOpen] = React.useState(false);
     const [credentialError, setCredentialError] = React.useState(null);
@@ -175,6 +184,7 @@ export function createTokenChannelSettings(definition) {
         setModel({
           phase: 'ready', bots: snapshot.bots, totals: snapshot.totals, error: null,
           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG,
+          permissions: snapshot.permissions,
         });
       } catch (error) {
         if (error?.name !== 'AbortError' && mounted.current && !signal?.aborted
@@ -221,6 +231,7 @@ export function createTokenChannelSettings(definition) {
           setModel({
           phase: 'ready', bots: snapshot.bots, totals: snapshot.totals, error: null,
           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG,
+          permissions: snapshot.permissions,
         });
         }
         setCredentialOpen(false);
@@ -243,6 +254,7 @@ export function createTokenChannelSettings(definition) {
           setModel({
           phase: 'ready', bots: snapshot.bots, totals: snapshot.totals, error: null,
           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG,
+          permissions: snapshot.permissions,
         });
         }
         if (mounted.current && operation === 'reconnect') {
@@ -356,6 +368,7 @@ export function createTokenChannelSettings(definition) {
         : h(React.Fragment, null,
             credentialOpen ? (CredentialPanel
               ? h(CredentialPanel, {
+                  permissions: model.permissions,
                   busy,
                   error: credentialError,
                   onSubmit: bindCredentials,

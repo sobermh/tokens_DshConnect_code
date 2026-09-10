@@ -1,3 +1,4 @@
+import { registerManagementRpc } from '../../../management-rpc.mjs';
 import QRCode from 'qrcode';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 import { publicWorkspaceError, SET_WORKSPACE_ENDPOINT, validWorkspacePayload } from '../shared/workspace-rpc.mjs';
@@ -195,10 +196,7 @@ export function createWecomRpcHandler(controller, { encodeQr = qrDataUrl } = {})
 }
 
 export function installWecomRpc(ctx, controller, options, authority) {
-  if (!ctx?.connection?.rpc || typeof ctx.connection.rpc.handle !== 'function') {
-    throw new TypeError('DSH Host Connection RPC is required');
-  }
-  return ctx.connection.rpc.handle(
+  return registerManagementRpc(ctx,
     WECOM_RPC_CHANNEL,
     createWecomRpcHandler(controller, options),
     { authority: resolveRpcAuthority(authority) },

@@ -52,6 +52,10 @@ import {
   WhatsappSettingsTab,
 } from '../plugin-src/client/channels/whatsapp/index.js';
 import {
+  IMessageAccountCard,
+  IMessageSettingsTab,
+} from '../plugin-src/client/channels/imessage/index.js';
+import {
   en,
   IM_LOCALE_NAMESPACE,
   localizeText,
@@ -116,6 +120,7 @@ test('connection center separates IM bots and app authorization', async () => {
     telegramRpcCall: async () => ({ ok: true, value: {} }),
     discordRpcCall: async () => ({ ok: true, value: {} }),
     whatsappRpcCall: async () => ({ ok: true, value: {} }),
+    imessageRpcCall: async () => ({ ok: true, value: {} }),
     feishuPersonalRpcCall: async () => ({ ok: true, value: {} }),
     dingtalkPersonalRpcCall: async () => ({ ok: true, value: {} }),
   }));
@@ -155,6 +160,7 @@ test('connection center separates IM bots and app authorization', async () => {
   assert.match(markup, />Telegram</);
   assert.match(markup, />Discord</);
   assert.match(markup, />WhatsApp</);
+  assert.match(markup, />iMessage</);
   assert.match(markup, /dim-logoWeixin/);
   assert.match(markup, /dim-logoFeishu/);
   assert.match(markup, /dim-logoDingtalk/);
@@ -164,13 +170,14 @@ test('connection center separates IM bots and app authorization', async () => {
   assert.match(markup, /dim-logoTelegram/);
   assert.match(markup, /dim-logoDiscord/);
   assert.match(markup, /dim-logoWhatsapp/);
+  assert.match(markup, /dim-logoIMessage/);
   assert.match(styles, /\.dim-logoFeishu svg \{ width: 28px; height: 28px; \}/);
   assert.match(styles, /\.dim-modeTabs \{[^}]*display: flex;[^}]*margin-top: 14px;[^}]*border-bottom: 1px solid/);
   assert.match(styles, /\.dim-modeTab \{[^}]*position: relative;[^}]*border: 0;[^}]*background: transparent;/);
   assert.match(styles, /\.dim-modeTab\[data-active="true"\]::after[^}]*height: 2px;[^}]*background: var\(--dsw-alias-label-primary, #1f2329\);/);
   assert.match(styles, /\.dim-rail \{[^}]*display: grid;[^}]*align-content: start;[^}]*gap: 7px;/);
   assert.match(styles, /\.dim-channel \{[^}]*min-height: 44px;[^}]*border-radius: 8px;/);
-  assert.equal((markup.match(/role="tab"/g) ?? []).length, 11);
+  assert.equal((markup.match(/role="tab"/g) ?? []).length, 12);
   assert.equal((markup.match(/aria-selected="true"/g) ?? []).length, 2);
   assert.doesNotMatch(markup, /role="switch"|type="checkbox"/);
   assert.doesNotMatch(markup, /dim-chevron|扫码绑定<\/small>|扫码接入<\/small>/);
@@ -205,6 +212,7 @@ test('connection center category switch reveals app authorization without a long
       telegramRpcCall: rpcCall,
       discordRpcCall: rpcCall,
       whatsappRpcCall: rpcCall,
+      imessageRpcCall: rpcCall,
       feishuPersonalRpcCall,
       dingtalkPersonalRpcCall: rpcCall,
     }));
@@ -226,6 +234,7 @@ test('connection center category switch reveals app authorization without a long
     'Telegram',
     'Discord',
     'WhatsApp',
+    'iMessage',
   ]);
 
   await act(async () => {
@@ -828,6 +837,7 @@ test('all IM channel cards keep localized actions visible above full-width feedb
     ['Telegram', TelegramAccountCard, { account, testNotice: notice }],
     ['Discord', DiscordAccountCard, { account, testNotice: notice }],
     ['WhatsApp', WhatsappAccountCard, { account, testNotice: notice }],
+    ['iMessage', IMessageAccountCard, { account, testNotice: notice }],
   ];
 
   for (const [channel, Card, props] of cards) {
@@ -1001,7 +1011,7 @@ test('client registers a live bilingual locale seat and directory picker for the
   }
 });
 
-test('all nine channel settings and connected cards render English copy', () => {
+test('all ten channel settings and connected cards render English copy', () => {
   const rpcCall = async () => ({ ok: true, value: {} });
   const noop = () => {};
   const account = {
@@ -1031,6 +1041,7 @@ test('all nine channel settings and connected cards render English copy', () => 
       TelegramSettingsTab,
       DiscordSettingsTab,
       WhatsappSettingsTab,
+      IMessageSettingsTab,
     ];
     const pageMarkup = pages.map((Component) =>
       renderToStaticMarkup(React.createElement(Component, { rpcCall }))).join('\n');
@@ -1045,6 +1056,7 @@ test('all nine channel settings and connected cards render English copy', () => 
     assert.match(pageMarkup, /Loading Telegram bot status/);
     assert.match(pageMarkup, /Loading Discord bot status/);
     assert.match(pageMarkup, /Loading WhatsApp bot status/);
+    assert.match(pageMarkup, /Loading iMessage bot status/);
     assert.doesNotMatch(pageMarkup, /[\p{Script=Han}]/u);
 
     const sharedCardProps = {
@@ -1064,6 +1076,7 @@ test('all nine channel settings and connected cards render English copy', () => 
       React.createElement(TelegramAccountCard, { ...sharedCardProps, account }),
       React.createElement(DiscordAccountCard, { ...sharedCardProps, account }),
       React.createElement(WhatsappAccountCard, { ...sharedCardProps, account }),
+      React.createElement(IMessageAccountCard, { ...sharedCardProps, account }),
     ];
     const cardMarkup = cards.map(renderToStaticMarkup).join('\n');
     assert.match(cardMarkup, /Connected/);
