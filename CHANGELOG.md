@@ -4,12 +4,35 @@
 
 This file records the notable changes in each dsh-im release. Its format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and its versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [2.7.0] - 2026-09-10
+
+### Added / 新增
+
+- 新增原生 macOS iMessage 通道：读取本机 Messages 数据库、经 AppleScript 发送，含权限检测与首次启动游标初始化；Windows 上明确显示为不支持。
+  Added the native macOS iMessage channel: it reads the local Messages database, sends via AppleScript, and includes permission detection plus first-run cursor initialization; Windows explicitly reports it as unsupported.
+
+- 新增消息失败诊断：文本与文件发送失败带稳定错误码、脱敏参考号和可执行的恢复提示，机器人状态暴露 `lastMessageError`，连接中心展示最近一次消息失败。
+  Added message-failure diagnostics: text and file delivery failures carry stable error codes, redacted reference IDs, and actionable recovery guidance; bot status exposes `lastMessageError`, and the Connection Center shows the most recent failure.
 
 ### Fixed / 修复
 
+- IM 通道改用 Host 进程内 Harness API（新版走 `typertGateway`，旧版走 `apiProxy`），不再请求本机回环 HTTP，修复新版桌面端访问隔离导致所有 IM 通道 `host.describe` 403 的问题；显式配置 `harnessBaseUrl` 时仍保留 HTTP／WS 路径。
+  IM channels now use the in-process Harness API of the Host (`typertGateway` on current DSH, `apiProxy` on legacy) instead of loopback HTTP, fixing the desktop access isolation that returned 403 on `host.describe` for every IM channel; an explicit `harnessBaseUrl` still keeps the HTTP/WS path.
+
+- 兼容旧版与新版 DSH Host，插件可在两代宿主上加载运行。
+  Support both legacy and current DSH hosts, so the plugin loads and runs on either generation.
+
+- IM 管理 RPC 统一通过 DSH 公共 `/api` 承载层（`/api/dsh-im/...`）传递；个人账号授权 RPC 保持原有独立通道。
+  IM management RPC is now carried over the shared DSH `/api` layer (`/api/dsh-im/...`); personal-account authorization RPC keeps its original dedicated channel.
+
 - 同步上游 IM 管理信任策略：默认沿用 Harness 的浏览器认证与 Host／Origin 校验，仍可显式设置 `rpcAuthority: loopback` 限制为本机访问。
   Synced the upstream IM management trust policy: browser authentication and Host/Origin checks from Harness are used by default, while `rpcAuthority: loopback` remains available for local-only access.
+
+- 保留 DSH 直接抛出的 `RemoteError` 原始错误码与详情，不再被适配层降级为 `internal`。
+  Preserve the original code and details of `RemoteError` thrown directly by DSH instead of degrading them to `internal` in the adapter.
+
+- Telegram 慢请求期间不再排队草稿心跳，避免占位消息堆积。
+  Telegram no longer queues draft heartbeats during slow requests, preventing piled-up placeholder updates.
 
 - 同步 iMessage 自聊防循环修复：只处理入站副本，机器人回复写入 `🤖 DSH` 标记，并在重启后继续过滤机器人回声。
   Synced the iMessage self-chat loop protection: process only inbound copies, mark bot replies with `🤖 DSH`, and keep filtering bot echoes after restart.
