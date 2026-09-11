@@ -1,5 +1,7 @@
 // English translations (telegram area). Keys are exact Chinese literals passed to t().
 export default {
+  '批准': 'Approve',
+  '拒绝': 'Reject',
   '开启一个全新会话': 'Start a brand-new Session',
   '压缩当前会话的较早上下文': 'Compact the earlier context of the current Session',
   '切换工作区': 'Switch Workspace',
