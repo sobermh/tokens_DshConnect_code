@@ -4,6 +4,7 @@ import { createEditableMessageStream, splitMessageText } from '../shared/editabl
 import { createTextDeliveryBlock } from '../shared/semantic/delivery.mjs';
 import { t } from '../shared/i18n.mjs';
 import { COMMANDS_MENU_BUTTON, TelegramApi } from './telegram-api.mjs';
+import { TelegramButtons } from './telegram-buttons.mjs';
 import { createTelegramBridgeStatus, TelegramHarnessBridge } from './telegram-bridge.mjs';
 import {
   splitTelegramRegularText,
@@ -274,6 +275,7 @@ class TelegramDeliveryStream {
 }
 
 export class TelegramBotClient {
+  #buttons;
   #api;
   #signal;
   #logger;
@@ -282,22 +284,35 @@ export class TelegramBotClient {
     this.#api = api;
     this.#signal = signal;
     this.#logger = logger;
+    this.#buttons = new TelegramButtons(api, signal);
   }
 
-  async sendText(target, text) {
+  handleCallback(query, accept, allowed) {
+    return this.#buttons.handle(query, accept, allowed);
+  }
+
+  async sendText(target, text, buttons) {
     const chunks = splitTelegramRegularText(text);
     const providerMessageIds = [];
-    for (const [index, chunk] of chunks.entries()) {
-      const result = await this.#api.sendMessage({
-        chatId: target.chatId,
-        text: chunk,
-        replyToMessageId: index === 0 ? target.replyToMessageId : undefined,
-        messageThreadId: target.messageThreadId,
-        signal: this.#signal,
-      });
-      if (Number.isSafeInteger(result?.message_id)) {
-        providerMessageIds.push(String(result.message_id));
+    const keyboard = this.#buttons.create(target, buttons);
+    try {
+      for (const [index, chunk] of chunks.entries()) {
+        const result = await this.#api.sendMessage({
+          chatId: target.chatId,
+          text: chunk,
+          replyMarkup: index === chunks.length - 1 ? keyboard?.markup : undefined,
+          replyToMessageId: index === 0 ? target.replyToMessageId : undefined,
+          messageThreadId: target.messageThreadId,
+          signal: this.#signal,
+        });
+        if (Number.isSafeInteger(result?.message_id)) {
+          providerMessageIds.push(String(result.message_id));
+          if (index === chunks.length - 1) keyboard?.attach(result.message_id);
+        }
       }
+    } catch (error) {
+      keyboard?.discard();
+      throw error;
     }
     return { providerMessageIds };
   }
@@ -645,6 +660,7 @@ export class TelegramRuntime {
   #allowedPrivateUserIds;
   #status = createTelegramRuntimeStatus();
   #api = null;
+  #client = null;
   #bridge = null;
   #abortController = null;
   #pollTask = null;
@@ -733,6 +749,7 @@ export class TelegramRuntime {
         signal: controller.signal,
         logger: this.#logger,
       });
+      this.#client = client;
       this.#bridge = new TelegramHarnessBridge({
         bot: client,
         harness: this.#harness,
@@ -779,6 +796,18 @@ export class TelegramRuntime {
       this.#status.lastCheckedAt = Date.now();
       for (const update of updates) {
         if (signal.aborted) return;
+        if (update.callback_query) {
+          void this.#client.handleCallback(update.callback_query,
+            (message) => this.#bridge.accept(message),
+            (message) => telegramInboundAllowed(message, {
+              accessMode: this.#accessMode, allowedPrivateUserIds: this.#allowedPrivateUserIds,
+            })).catch((error) => {
+              if (!signal.aborted) this.#logger.error?.('[dsh-im:telegram] callback failed:', error);
+            });
+          cursor = update.update_id + 1;
+          await this.#state.setCursor(cursor);
+          continue;
+        }
         const message = normalizeTelegramUpdate(update, {
           botId: this.#config.platformId,
           username: this.#config.username,

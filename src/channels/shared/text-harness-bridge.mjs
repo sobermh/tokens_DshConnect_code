@@ -970,7 +970,10 @@ export class TextHarnessBridge {
         key,
         actor,
         requiresMention,
-        send: (text) => this.#bot.sendText(target, text),
+        send: (text, buttons) => this.#bot.sendText(target, text, buttons && {
+          ...buttons,
+          isActive: () => buttons.isActive() && !this.#pendingInteractions.has(key),
+        }),
       });
     }
     if (interaction?.kind !== 'question') return;
@@ -1063,6 +1066,7 @@ export class TextHarnessBridge {
     if (pending.presentationTask) return pending.presentationTask;
     const question = pending.questions[pending.index];
     if (!question) return Promise.resolve();
+    const index = pending.index;
     const task = (async () => {
       await this.#bot.sendText(
         pending.target,
@@ -1072,6 +1076,13 @@ export class TextHarnessBridge {
           pending.questions.length,
           { requiresMention: pending.requiresMention },
         ),
+        {
+          actor: pending.actor,
+          options: question.options ?? [],
+          multiSelect: question.multiSelect === true,
+          isActive: () => this.#interactionKeys.has(pending.interactionId)
+            && pending.index === index && !pending.submitting && !pending.claimedReplyMessageId,
+        },
       );
       pending.needsPresentation = false;
     })();

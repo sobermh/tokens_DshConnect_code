@@ -353,7 +353,13 @@ export class HarnessApprovalQueue {
     if (this.#routes.get(pending.key)?.items[0] !== pending
       || pending.inactive || pending.resolving || pending.presented) return;
     if (pending.presentationTask) return pending.presentationTask;
-    const task = Promise.resolve().then(() => pending.send(pending.text));
+    const task = Promise.resolve().then(() => pending.send(pending.text, {
+      actor: pending.actor,
+      options: [{ label: t('批准') }, { label: t('拒绝') }],
+      values: ['批准', '拒绝'],
+      isActive: () => this.#routes.get(pending.key)?.items[0] === pending
+        && pending.presented && !pending.inactive && !pending.resolving && !pending.submitting,
+    }));
     pending.presentationTask = task;
     try {
       await task;

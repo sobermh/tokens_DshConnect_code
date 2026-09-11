@@ -383,14 +383,17 @@ class ModernHarnessApi {
 
   #claimableAgent(agent) {
     const sessionId = agent?.session?.id ?? agent?.id;
-    if (typeof sessionId !== 'string' || !agent?.session || !Array.isArray(agent.session.events)) {
+    const session = agent?.session;
+    const events = typeof session?.snapshotEvents === 'function'
+      ? session.snapshotEvents() : session?.events;
+    if (typeof sessionId !== 'string' || !Array.isArray(events)) {
       return null;
     }
     return hasActiveHarnessInteractionOwner(
       this.#scope,
       sessionId,
-      agent.session.events,
-    ) ? { sessionId, session: agent.session } : null;
+      events,
+    ) ? { sessionId, events } : null;
   }
 
   #questionFrame(pending) {
@@ -461,8 +464,8 @@ class ModernHarnessApi {
     const claimed = new Set([...this.#pendingApprovals.values()].map((entry) => entry.approvalId));
     const decided = new Set();
     let approvalId;
-    for (let index = owner.session.events.length - 1; index >= 0; index -= 1) {
-      const event = owner.session.events[index];
+    for (let index = owner.events.length - 1; index >= 0; index -= 1) {
+      const event = owner.events[index];
       if (event.type === 'approval/decided') {
         decided.add(event.data?.id);
       } else if (event.type === 'approval/asked') {

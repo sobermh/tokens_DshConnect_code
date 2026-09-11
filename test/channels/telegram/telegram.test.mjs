@@ -1449,7 +1449,7 @@ test('Telegram runtime enforces the selected bot private allowlist', async () =>
   }
 });
 
-test('Telegram runtime keeps polling while a Harness question waits for its answer', async () => {
+for (const useButtons of [false, true]) test(`Telegram runtime keeps polling while a Harness question waits for its ${useButtons ? 'button' : 'text'} answer`, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-im-telegram-interaction-'));
   const state = await new TelegramStateStore(join(directory, 'state.json')).load();
   const questionSent = deferred();
@@ -1504,10 +1504,22 @@ test('Telegram runtime keeps polling while a Harness question waits for its answ
       });
     },
     sendChatAction: async () => true,
-    sendMessage: async ({ text }) => {
+    answerCallbackQuery: async () => true,
+    editMessageReplyMarkup: async () => true,
+    sendMessage: async ({ text, replyMarkup }) => {
       const messageId = nextOutboundMessageId;
       nextOutboundMessageId += 1;
-      if (text.includes('请选择测试环境')) questionSent.resolve();
+      if (text.includes('请选择测试环境')) {
+        if (useButtons) {
+          delete answerUpdate.message;
+          answerUpdate.callback_query = {
+            id: 'answer-11', from: { id: 7 },
+            message: { message_id: messageId, chat: { id: 42, type: 'private' } },
+            data: replyMarkup.inline_keyboard[1][0].callback_data,
+          };
+        }
+        questionSent.resolve();
+      }
       return { message_id: messageId };
     },
     sendRichMessageDraft: async () => true,
@@ -1608,7 +1620,7 @@ test('Telegram runtime keeps polling while a Harness question waits for its answ
     })(), 'Telegram cursor did not advance past the answer update');
     assert.deepEqual(pollOffsets.slice(0, 4), [-1, 0, 11, 12]);
     assert.equal(state.hasSeen('10'), true);
-    assert.equal(state.hasSeen('11'), true);
+    assert.equal(state.hasSeen(useButtons ? 'callback:answer-11' : '11'), true);
 
     releaseTurn.resolve();
     await bounded(finalReplySent.promise, 'the original Harness turn did not finish');

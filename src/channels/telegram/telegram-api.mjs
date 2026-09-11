@@ -134,7 +134,7 @@ export class TelegramApi {
     const payload = {
       timeout,
       limit: 100,
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'callback_query'],
       ...(Number.isSafeInteger(offset) ? { offset } : {}),
     };
     return this.#call('getUpdates', payload, {
@@ -191,10 +191,11 @@ export class TelegramApi {
     return url;
   }
 
-  async sendMessage({ chatId, text, replyToMessageId, messageThreadId, signal }) {
+  async sendMessage({ chatId, text, replyToMessageId, messageThreadId, replyMarkup, signal }) {
     return this.#call('sendMessage', {
       chat_id: chatId,
       text,
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       link_preview_options: { is_disabled: true },
       ...(replyToMessageId ? {
         reply_parameters: { message_id: replyToMessageId, allow_sending_without_reply: true },
@@ -309,6 +310,18 @@ export class TelegramApi {
         text,
         link_preview_options: { is_disabled: true },
       }),
+    }, { signal });
+  }
+
+  async answerCallbackQuery({ callbackQueryId, text, signal }) {
+    return this.#call('answerCallbackQuery', {
+      callback_query_id: callbackQueryId, text,
+    }, { signal });
+  }
+
+  async editMessageReplyMarkup({ chatId, messageId, replyMarkup, signal }) {
+    return this.#call('editMessageReplyMarkup', {
+      chat_id: chatId, message_id: messageId, reply_markup: replyMarkup,
     }, { signal });
   }
 

@@ -211,7 +211,7 @@ test('modern adapter preserves direct DSH RemoteErrors as Harness RPC errors', a
   );
 });
 
-test('modern adapter routes an approval only to the active dsh-im turn', async () => {
+for (const modernSession of [false, true]) test(`modern adapter routes an approval only to the active dsh-im turn (snapshotEvents: ${modernSession})`, async () => {
   const session = { id: 'session', events: [] };
   const eventRecord = (event) => ({ type: 'event', event });
   let fixture;
@@ -239,7 +239,8 @@ test('modern adapter routes an approval only to the active dsh-im turn', async (
             data: { id: 'approval-one', toolName: 'bash', callId: 'call-one' },
           });
           const outcome = await fixture.waterfall('approval/request', {
-            agent: { id: 'session', session },
+            agent: { id: 'session', session: modernSession
+              ? { id: session.id, snapshotEvents: () => [...session.events] } : session },
             toolName: 'bash',
             callId: 'call-one',
           }, () => Promise.resolve('unavailable'));
@@ -306,7 +307,7 @@ test('modern adapter routes an approval only to the active dsh-im turn', async (
   assert.equal(delegated, 'browser-owned');
 });
 
-test('modern adapter routes structured questions only to the active dsh-im turn', async () => {
+for (const modernSession of [false, true]) test(`modern adapter routes structured questions only to the active dsh-im turn (snapshotEvents: ${modernSession})`, async () => {
   const session = { id: 'session', events: [] };
   const eventRecord = (event) => ({ type: 'event', event });
   let fixture;
@@ -331,7 +332,8 @@ test('modern adapter routes structured questions only to the active dsh-im turn'
             data: { turn: 1, source: { kind: 'user', rpcId }, message: { content: [] } },
           });
           structuredAnswer = await fixture.waterfall('user-questions/request', {
-            agent: { id: 'session', session },
+            agent: { id: 'session', session: modernSession
+              ? { id: session.id, snapshotEvents: () => [...session.events] } : session },
             questions: [{
               id: 'environment',
               question: 'Choose an environment',
