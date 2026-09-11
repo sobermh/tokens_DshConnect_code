@@ -4,6 +4,21 @@
 
 This file records the notable changes in each dsh-im release. Its format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and its versions follow [Semantic Versioning](https://semver.org/).
 
+## [2.8.0] - 2026-09-11
+
+### Added / 新增
+
+- Telegram 提问和审批支持内联按钮：单选直接提交，多选勾选后提交，审批支持批准或拒绝；保留文字回复，并校验用户及交互归属，防止重复或过期按钮误操作。
+  Telegram questions and approvals support inline keyboards: submit single choices immediately, select multiple options before submitting, and approve or reject operations. Text replies remain available, with user and interaction checks guarding against duplicate or stale actions.
+
+- 按钮回调复用现有长轮询，提交完成后原地移除按钮。
+  Button callbacks use the existing long poll and remove the keyboard in place after submission completes.
+
+### Fixed / 修复
+
+- 兼容新版 Harness Session 的 `snapshotEvents()` 和旧版 `events` 数组，修复 IM 提问和审批未被连接器接管的问题。
+  Support both the current Harness Session `snapshotEvents()` API and the legacy `events` array so IM questions and approvals are claimed by the connector.
+
 ## [2.7.0] - 2026-09-10
 
 ### Added / 新增
