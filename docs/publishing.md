@@ -25,7 +25,17 @@ npmjs Trusted Publishing/OIDC is not configured for Verdaccio.
 3. CI validates tag/package/registry identity, installs public build dependencies,
    runs tests, builds, verifies the package, packs it, and publishes to Verdaccio.
 
-Branch pushes, pull requests and manual CI runs only check; they never publish.
+Branch pushes, pull requests and manual CI runs without `release_tag` only check.
+If the tag push does not create a run, dispatch the current main workflow with an
+existing release tag:
+
+```sh
+gh workflow run ci.yml --ref main -f release_tag=v2.9.0
+```
+
+This checks out `refs/tags/v2.9.0`, validates its package identity, and runs the full
+checks before publishing. It does not publish the current main checkout or move
+the tag. Push and manual releases share a per-tag concurrency group.
 Prereleases cannot move `latest`. Authentication is exposed only in the publish
 step; publishing disables lifecycle scripts because checks/build already ran.
 No tarballs are uploaded as public GitHub artifacts or release assets.

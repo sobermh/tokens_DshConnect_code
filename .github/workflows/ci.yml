@@ -2,6 +2,11 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing stable tag to publish (leave empty for checks only)'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -14,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -26,6 +31,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,10 +41,10 @@ jobs:
           registry-url: https://npm.tokensapi.ai/
 
       - name: Validate release identity
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         run: node scripts/validate-release.mjs "$RELEASE_TAG"
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
       - name: Install dependencies
         run: npm ci --registry=https://registry.npmjs.org/
@@ -47,13 +53,13 @@ jobs:
         run: npm run check
 
       - name: Pack verified release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && github.repository == 'sobermh/tokens_DshConnect_code'
+        if: github.repository == 'sobermh/tokens_DshConnect_code' && ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
         run: |
           mkdir -p .release
           npm pack --ignore-scripts --pack-destination .release
 
       - name: Publish to Verdaccio
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && github.repository == 'sobermh/tokens_DshConnect_code'
+        if: github.repository == 'sobermh/tokens_DshConnect_code' && ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
         env:
           NODE_AUTH_TOKEN: ${{ secrets.VERDACCIO_PUBLISH_TOKEN }}
         run: |
