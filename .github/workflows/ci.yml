@@ -6,7 +6,16 @@ on:
     branches:
       - main
       - 'feishu-*'
+    tags:
+      - 'v*'
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -15,15 +24,47 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+          registry-url: https://npm.tokensapi.ai/
+
+      - name: Validate release identity
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        run: node scripts/validate-release.mjs "$RELEASE_TAG"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --registry=https://registry.npmjs.org/
 
       - name: Run checks
         run: npm run check
+
+      - name: Pack verified release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && github.repository == 'sobermh/tokens_DshConnect_code'
+        run: |
+          mkdir -p .release
+          npm pack --ignore-scripts --pack-destination .release
+
+      - name: Publish to Verdaccio
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && github.repository == 'sobermh/tokens_DshConnect_code'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.VERDACCIO_PUBLISH_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo 'Configure the VERDACCIO_PUBLISH_TOKEN repository secret before releasing.' >&2
+            exit 1
+          fi
+          publisher="$(npm whoami --registry=https://npm.tokensapi.ai/)"
+          if [ "$publisher" != 'tokenscowork' ]; then
+            echo 'The registry token does not belong to the approved publisher.' >&2
+            exit 1
+          fi
+          npm publish .release/*.tgz --ignore-scripts --registry=https://npm.tokensapi.ai/ --tag=latest
+          npm view "@tokensapi/dsh-connect@$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')" version --registry=https://npm.tokensapi.ai/

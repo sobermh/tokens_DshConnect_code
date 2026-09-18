@@ -48,7 +48,7 @@
   "homepage": "https://github.com/sobermh/tokens_DshConnect_code#readme",
   "bugs": "https://github.com/sobermh/tokens_DshConnect_code/issues",
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.tokensapi.ai/"
   },
   "bin": {
     "dsh-connect": "bin/dsh-connect.mjs",
