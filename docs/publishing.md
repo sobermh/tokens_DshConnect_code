@@ -14,7 +14,12 @@ normal credential-management process. Never commit `.npmrc` credentials or paste
 tokens into logs. Tokens expire and must be rotated when needed.
 
 Protect `v*` tags with repository rulesets so only release maintainers can create
-them. Keep Actions enabled for this fork. This registry uses a secret-backed token;
+them. On a new fork, open the repository Actions page while signed in and confirm
+`I understand my workflows, go ahead and enable them`. Until this fork-specific
+confirmation is completed, automatic push runs can remain disabled even when the
+Actions permissions API reports `enabled: true`, the workflow reports `active`,
+and manual dispatches succeed. Verify activation with an actual push-triggered run.
+This registry uses a secret-backed token;
 npmjs Trusted Publishing/OIDC is not configured for Verdaccio.
 
 ## Release
