@@ -57,8 +57,6 @@ function fixture({
   verifyApp,
   credentialSet,
   deleteState,
-  applicationService,
-  sharedUserScopes,
 } = {}) {
   const configStore = new MemoryConfigStore(bots);
   const values = new Map(Object.entries(secrets));
@@ -95,8 +93,6 @@ function fixture({
         values.delete(ref);
       },
     },
-    applicationService,
-    sharedUserScopes,
     configStore,
     createRuntime: async ({ botId, config, appSecret, repair }) => {
       const status = {
@@ -111,6 +107,7 @@ function fixture({
         starts: 0,
         stops: 0,
         sentTests: [],
+        proactiveSends: [],
         probes: [],
         responseModes: [],
         repair,
@@ -129,6 +126,10 @@ function fixture({
         },
         async sendConnectionTest(text) {
           runtime.sentTests.push(text);
+          return { sent: true };
+        },
+        async sendProactiveText(...args) {
+          runtime.proactiveSends.push(args);
           return { sent: true };
         },
         setGroupResponseMode(mode) {
@@ -176,11 +177,8 @@ function callbackRepairQrUrl(appId, domain = 'feishu') {
   return `https://${host}/page/launcher?tp=sdk&clientID=${encodeURIComponent(appId)}&addons=encoded`;
 }
 
-test('QR registration separates events from card callbacks and prepares personal OAuth reuse', async () => {
-  const fx = fixture({
-    createBotIds: ['bot_callbacks'],
-    sharedUserScopes: ['offline_access', 'docx:document:create'],
-  });
+test('QR registration separates events from card callbacks', async () => {
+  const fx = fixture({ createBotIds: ['bot_callbacks'] });
   const started = fx.controller.startRegistration();
   const attemptId = started.registration.attempt;
   await waitFor(() => fx.registrationRuns.length === 1);
@@ -188,8 +186,10 @@ test('QR registration separates events from card callbacks and prepares personal
   assert.deepEqual(run.options.addons.events.items.tenant, ['im.message.receive_v1']);
   assert.deepEqual(run.options.addons.callbacks.items, ['card.action.trigger']);
   assert.ok(run.options.addons.scopes.tenant.includes('im:resource'));
-  assert.deepEqual(run.options.addons.scopes.user, ['offline_access', 'docx:document:create']);
+  assert.ok(run.options.addons.scopes.tenant.includes('im:message.group_at_msg.include_bot:readonly'));
   assert.equal(run.options.addons.scopes.tenant.includes('im:resource:upload'), false);
+  assert.ok(run.options.addons.scopes.tenant.includes('application:app_slash_command:read'));
+  assert.ok(run.options.addons.scopes.tenant.includes('application:app_slash_command:write'));
   run.options.onQRCodeReady({ url: 'https://accounts.feishu.cn/callbacks', expireIn: 60 });
   run.resolve({
     client_id: 'cli_callbacks', client_secret: 'callbacks-secret',
@@ -220,6 +220,82 @@ test('group response mode defaults to mention and updates the live runtime witho
   await assert.rejects(
     fx.controller.updateGroupResponseMode(existing.id, 'sometimes'),
     /Invalid Feishu group response mode/,
+  );
+  await fx.controller.close();
+});
+
+test('groupTopicReply persists and reaches the live runtime without reconnecting', async () => {
+  const existing = bot('bot_topic_reply', 'topic_reply');
+  const fx = fixture({
+    bots: [existing],
+    secrets: { [existing.secretRef]: 'stable-secret' },
+  });
+  await fx.controller.initialize();
+
+  assert.equal(fx.controller.status().bots[0].groupTopicReply, false);
+  const runtime = fx.runtimes.get(existing.id)[0];
+  const topicReplies = [];
+  runtime.setGroupTopicReply = (value) => topicReplies.push(value);
+  const updated = await fx.controller.updateGroupTopicReply(existing.id, true);
+
+  assert.equal(updated.bots[0].groupTopicReply, true);
+  assert.equal(fx.configStore.getBot(existing.id).groupTopicReply, true);
+  assert.deepEqual(topicReplies, [true]);
+  assert.equal(fx.runtimes.get(existing.id).length, 1);
+  await assert.rejects(
+    fx.controller.updateGroupTopicReply(existing.id, 'yes'),
+    /Invalid Feishu group topic reply flag/,
+  );
+  await fx.controller.close();
+});
+
+test('stepPush persists and reaches the live runtime without reconnecting', async () => {
+  const existing = bot('bot_step_push', 'step_push');
+  const fx = fixture({
+    bots: [existing],
+    secrets: { [existing.secretRef]: 'stable-secret' },
+  });
+  await fx.controller.initialize();
+
+  assert.equal(fx.controller.status().bots[0].stepPush, false);
+  const runtime = fx.runtimes.get(existing.id)[0];
+  const stepPushes = [];
+  runtime.setStepPush = (value) => stepPushes.push(value);
+  const updated = await fx.controller.updateStepPush(existing.id, true);
+
+  assert.equal(updated.bots[0].stepPush, true);
+  assert.equal(fx.configStore.getBot(existing.id).stepPush, true);
+  assert.deepEqual(stepPushes, [true]);
+  assert.equal(fx.runtimes.get(existing.id).length, 1);
+  await assert.rejects(
+    fx.controller.updateStepPush(existing.id, 'yes'),
+    /Invalid Feishu step push/,
+  );
+  await fx.controller.close();
+});
+
+test('stepPushMode persists, normalizes, and reaches the live runtime without reconnecting', async () => {
+  const existing = bot('bot_step_push_mode', 'step_push_mode');
+  const fx = fixture({
+    bots: [existing],
+    secrets: { [existing.secretRef]: 'stable-secret' },
+  });
+  await fx.controller.initialize();
+
+  // Missing stored modes preserve the existing post presentation.
+  assert.equal(fx.controller.status().bots[0].stepPushMode, 'post');
+  const runtime = fx.runtimes.get(existing.id)[0];
+  const modes = [];
+  runtime.setStepPushMode = (value) => modes.push(value);
+  const updated = await fx.controller.updateStepPushMode(existing.id, 'streaming_card');
+
+  assert.equal(updated.bots[0].stepPushMode, 'streaming_card');
+  assert.equal(fx.configStore.getBot(existing.id).stepPushMode, 'streaming_card');
+  assert.deepEqual(modes, ['streaming_card']);
+  assert.equal(fx.runtimes.get(existing.id).length, 1);
+  await assert.rejects(
+    fx.controller.updateStepPushMode(existing.id, 'bubble'),
+    /Invalid Feishu step push mode/,
   );
   await fx.controller.close();
 });
@@ -349,7 +425,15 @@ test('callback repair is deduplicated per bot, updates only its secret, and prov
   assert.equal(Object.hasOwn(run.options, 'appPreset'), false);
   assert.deepEqual(run.options.addons, {
     preset: false,
-    scopes: { tenant: ['im:message:readonly', 'im:resource'] },
+    scopes: {
+      tenant: [
+        'im:message:readonly',
+        'im:resource',
+        'im:message.group_at_msg.include_bot:readonly',
+        'application:app_slash_command:read',
+        'application:app_slash_command:write',
+      ],
+    },
     callbacks: { items: ['card.action.trigger'] },
   });
   run.options.onQRCodeReady({
@@ -751,61 +835,23 @@ test('manual Feishu credentials are verified, stored host-side, and use app visi
   await fx.controller.close();
 });
 
-test('an existing shared application can attach a bot without duplicating or deleting its secret', async () => {
-  const application = {
-    applicationId: 'app_shared',
-    name: '共享飞书应用',
-    appIdMasked: 'cli_shar••••ared',
-    domain: 'feishu',
-    botIds: [],
-    botCount: 0,
-    usedByPersonal: true,
-  };
-  const secretRef = 'DSH_FEISHU_APP_SECRET_SHARED';
-  const applicationService = {
-    listPublic: () => [structuredClone(application)],
-    getPublic: (id) => id === application.applicationId ? structuredClone(application) : null,
-    async resolveCredentials(id) {
-      assert.equal(id, application.applicationId);
-      return {
-        applicationId: id,
-        appId: 'cli_shared',
-        appSecret: 'shared-secret',
-        secretRef,
-        domain: 'feishu',
-        name: application.name,
-      };
-    },
-    async storeApplication() { return structuredClone(application); },
-    async attachBot(id, botId) {
-      assert.equal(id, application.applicationId);
-      application.botIds = [botId];
-      application.botCount = 1;
-    },
-    async detachBot(botId) {
-      application.botIds = application.botIds.filter((candidate) => candidate !== botId);
-      application.botCount = application.botIds.length;
-    },
-  };
+test('manual Lark binding verifies, persists, and starts the runtime with the Lark domain', async (t) => {
+  const verified = [];
   const fx = fixture({
-    createBotIds: ['bot_shared'],
-    secrets: { [secretRef]: 'shared-secret' },
-    applicationService,
+    createBotIds: ['bot_lark'],
+    verifyApp: async (options) => {
+      verified.push(options);
+      return { name: 'Lark bot', openId: 'ou_lark_bot', activated: 1 };
+    },
   });
-
-  const attached = await fx.controller.bindSharedApplication(application.applicationId);
-  assert.equal(attached.totals.connected, 1);
-  assert.equal(fx.configStore.getBot('bot_shared').secretRef, secretRef);
-  assert.equal(fx.runtimes.get('bot_shared')[0].appSecret, 'shared-secret');
-  assert.equal(attached.applications[0].usedByPersonal, true);
-  assert.doesNotMatch(JSON.stringify(attached), /shared-secret|secretRef/);
-
-  const removed = await fx.controller.deleteBot('bot_shared');
-  assert.equal(removed.totals.configured, 0);
-  assert.equal(application.botCount, 0);
-  assert.equal(fx.values.get(secretRef), 'shared-secret');
-  assert.deepEqual(fx.unsetCalls, []);
-  await fx.controller.close();
+  t.after(() => fx.controller.close());
+  const credentials = { appId: 'cli_lark', appSecret: 'lark-private-secret', domain: 'lark' };
+  const result = await fx.controller.bindCredentials(credentials);
+  assert.deepEqual(verified, [credentials]);
+  assert.equal(fx.configStore.getBot('bot_lark').domain, 'lark');
+  assert.equal(fx.runtimes.get('bot_lark')[0].config.domain, 'lark');
+  assert.equal(result.bots[0].bot.domain, 'lark');
+  assert.doesNotMatch(JSON.stringify(result), /lark-private-secret|appSecret/);
 });
 
 test('initialization isolates failures and starts every bot with available credentials', async () => {
@@ -856,8 +902,13 @@ test('connection test uses the selected bot runtime and shared message copy', as
   await fx.controller.initialize();
   assert.deepEqual(await fx.controller.sendConnectionTest(healthy.id), { sent: true });
   assert.deepEqual(fx.runtimes.get(healthy.id)[0].sentTests, [
-    '✅ DeepSeek Harness 连接测试成功\n这条消息由插件页面中的“机器人 healthy（cli_heal••••7890）”机器人卡片发出。',
+    '✅ DeepSeek Harness 连接测试成功\n这条消息由「IM机器人」设置页中的“机器人 healthy（cli_heal••••7890）”机器人卡片发出。',
   ]);
+  const target = { kind: 'group', route: { chatId: 'oc_target' } };
+  assert.deepEqual(await fx.controller.sendProactiveText(healthy.id, target, '主动投递'), {
+    sent: true,
+  });
+  assert.deepEqual(fx.runtimes.get(healthy.id)[0].proactiveSends, [[target, '主动投递', {}]]);
   await fx.controller.close();
 });
 
@@ -1164,3 +1215,29 @@ test('a cancelled replacement whose start rejects still restores the old runtime
   assert.equal(fx.values.get(existing.secretRef), 'stable-secret');
   assert.equal(fx.controller.status().bots[0].connected, true);
 });
+
+for (const entry of ['manual', 'scan']) {
+  test('new process-card defaults and saved rebinding settings: ' + entry, async () => {
+    const fx = fixture({ createBotIds: ['bot_new_mode'] });
+    await fx.controller.initialize();
+    const connect = () => entry === 'manual'
+      ? fx.controller.bindCredentials({ appId: 'cli_new_mode', appSecret: 'test-secret' })
+      : completeScan(fx, { client_id: 'cli_new_mode', client_secret: 'test-secret', user_info: { open_id: 'ou_owner', tenant_brand: 'feishu' } });
+    await connect();
+    let saved = fx.configStore.getBot('bot_new_mode');
+    assert.equal(saved.stepPush, true);
+    assert.equal(saved.stepPushMode, 'streaming_card');
+    for (const settings of [
+      { stepPush: false, stepPushMode: 'post' },
+      { stepPush: true, stepPushMode: 'post' },
+      { stepPush: false, stepPushMode: 'streaming_card' },
+    ]) {
+      await fx.configStore.saveBot({ ...saved, ...settings });
+      await connect();
+      saved = fx.configStore.getBot(saved.id);
+      assert.equal(saved.stepPush, settings.stepPush);
+      assert.equal(saved.stepPushMode, settings.stepPushMode);
+    }
+    await fx.controller.close();
+  });
+}

@@ -1,4 +1,9 @@
+import { normalizeBotAlias } from '../../../../src/channels/shared/bot-alias.mjs';
 import { normalizeAgentPresetCatalog, normalizeAgentPresetId, SET_AGENT_PRESET_ENDPOINT } from '../../agent-preset.js';
+import { normalizeModelCatalog, normalizeModelSelection, SET_MODEL_ENDPOINT } from '../../model-setting.js';
+import { normalizeLastMessageError } from '../../last-message-error.js';
+import { normalizeAccessPolicy } from '../../../../src/channels/shared/access-policy.mjs';
+import { normalizeContextEnhancementConfig } from '../../../../src/channels/shared/context-enhancement.mjs';
 
 export const WHATSAPP_RPC_CHANNEL = '/whatsapp';
 
@@ -10,8 +15,11 @@ export const WHATSAPP_ENDPOINTS = Object.freeze({
   reconnectBot: 'bot.reconnect',
   deleteBot: 'bot.delete',
   setAccessPolicy: 'bot.access-policy.set',
+  setAlias: 'bot.alias.set',
   setWorkspace: 'bot.workspace.set',
+  setModel: SET_MODEL_ENDPOINT,
   setAgentPreset: SET_AGENT_PRESET_ENDPOINT,
+  setContextEnhancement: 'bot.context-enhancement.set',
 });
 
 const PROVISION_STATES = new Set(['starting', 'pending', 'connecting', 'connected', 'failed', 'cancelled']);
@@ -86,18 +94,14 @@ function normalizeBot(value) {
     connected,
     state: connected ? 'connected' : state,
     workspace: text(value.workspace, '', 4_096),
+    model: normalizeModelSelection(value.model),
     agentPreset: normalizeAgentPresetId(value.agentPreset),
-    accessPolicy: {
-      accessMode: ['self-only', 'private-allowlist', 'open'].includes(
-        value.accessPolicy?.accessMode,
-      ) ? value.accessPolicy.accessMode : 'self-only',
-      allowedNumbers: Array.isArray(value.accessPolicy?.allowedNumbers)
-        ? [...new Set(value.accessPolicy.allowedNumbers.filter((entry) => (
-            typeof entry === 'string' && /^[1-9]\d{4,14}$/.test(entry)
-          )))]
-        : [],
-    },
+    contextEnhancement: normalizeContextEnhancementConfig(value.contextEnhancement),
+    ...(Object.hasOwn(value, 'accessPolicy')
+      ? { accessPolicy: normalizeAccessPolicy(value.accessPolicy) }
+      : {}),
     bot: {
+      ...normalizeBotAlias(value.bot),
       name: text(value.bot?.name, 'WhatsApp机器人', 100),
       idMasked: text(value.bot?.idMasked, 'WhatsApp账号', 140),
     },
@@ -106,6 +110,7 @@ function normalizeBot(value) {
         ? 'WhatsApp Web 关联设备运行正常' : 'WhatsApp 连接尚未就绪'),
       lastCheckedAt: timestamp(value.health?.lastCheckedAt),
     },
+    lastMessageError: normalizeLastMessageError(value.lastMessageError),
     error: isRecord(value.error) ? {
       code: text(value.error.code, 'WHATSAPP_ACCOUNT_ERROR', 80),
       message: text(value.error.message, 'WhatsApp 连接尚未就绪'),
@@ -125,6 +130,7 @@ export function normalizeSnapshot(value) {
     totals: { configured: bots.length, connected: bots.filter((bot) => bot.connected).length },
     provisioning: source.provisioning ? normalizeProvisioning(source.provisioning) : null,
     agentPresetCatalog: normalizeAgentPresetCatalog(source.agentPresetCatalog),
+    modelCatalog: normalizeModelCatalog(source.modelCatalog),
   };
 }
 

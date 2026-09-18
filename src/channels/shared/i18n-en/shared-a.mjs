@@ -27,12 +27,18 @@ export default {
   '结果文件「{name}」已生成，但当前渠道暂时未能发送，请稍后重试。':
     'The result file "{name}" was generated, but this channel could not send it right now. Please try again later.',
   '消息处理失败，请稍后重试。': 'Failed to process the message. Please try again later.',
+  '卡片已结束，请查看后续消息。': 'This card has ended. Please check the next message.',
+  '工具调用「{name}」未成功，请检查工具配置或稍后重试。': 'Tool call "{name}" did not succeed. Check the tool configuration or try again later.',
   '无法连接处理服务，消息尚未提交。请确认 DeepSeek Harness 正在运行后重试。':
     'Could not connect to the processing service, so the message was not submitted. Make sure DeepSeek Harness is running, then try again.',
   '处理服务响应超时，消息尚未开始处理。请稍后重试。':
     'The processing service timed out before the message started. Please try again later.',
   '暂时无法确认任务状态，任务可能已经开始。请先等待或发送 /stop，不要立即重复提交。':
     'The task status could not be confirmed and the task may have started. Wait or send /stop before submitting it again.',
+  '消息提交结果未能确认，任务可能已经开始。请先等待或发送 /status 查看状态，不要立即重复提交。':
+    'The message submission could not be confirmed and the task may have started. Wait or send /status before submitting it again.',
+  '暂时无法读取任务进度，任务可能仍在运行。请先等待或发送 /stop，不要立即重复提交。':
+    'Task progress is temporarily unavailable and the task may still be running. Wait or send /stop before submitting it again.',
   '处理服务拒绝了机器人连接。请管理员检查 Harness 地址、代理或访问配置后重试。':
     'The processing service rejected the bot connection. Ask an administrator to check the Harness address, proxy, or access settings.',
   '机器人与 DeepSeek Harness 的接口不兼容。请管理员检查 Harness 地址并更新相关版本。':
@@ -49,10 +55,14 @@ export default {
     'The model service is rate-limiting requests. Please try again later.',
   '当前会话内容超过模型上下文上限。请发送 /compact 或 /new 后重试。':
     'This conversation exceeds the model context limit. Send /compact or /new, then try again.',
-  '当前模型不存在或不支持所选配置。请发送 /models，并使用 /model 重新选择。':
-    'The current model does not exist or does not support the selected settings. Send /models and use /model to choose again.',
+  '当前模型不存在或暂不可用。请发送 /models 查看并使用 /model 切换模型。':
+    'The current model does not exist or is unavailable. Send /models and use /model to switch models.',
+  '当前模型不存在或不支持所选配置。请发送 /models，再用 /model <序号> 为当前聊天重新选择。若要修改后续新会话的默认模型，请到 DSH 设置 → IM机器人 → 对应机器人卡片修改。':
+    'The current model does not exist or does not support the selected settings. Send /models, then use /model <index> to choose a model for the current conversation. To change the default model for new conversations, open DSH Settings → IM Bots → the corresponding bot card.',
   '当前模型不支持这类内容或所选配置。请调整内容、模型或推理等级后重试。':
     'The current model does not support this content or the selected settings. Adjust the content, model, or reasoning effort and try again.',
+  '当前模型不支持所选配置。请切换模型或推理等级后重试。':
+    'The current model does not support the selected settings. Switch the model or reasoning effort, then try again.',
   '模型服务响应超时，本次任务未完成。请稍后重试。':
     'The model service timed out and the task did not finish. Please try again later.',
   '暂时无法连接模型服务，本次任务未完成。请稍后重试。':
@@ -108,12 +118,62 @@ export default {
   '直接发送文字、图片、文件或带文字识别结果的语音即可继续当前会话。':
     'Send text, an image, a file, or a voice message already transcribed to text to continue the current session.',
   '{label}机器人已连接 DeepSeek Harness。': 'The {label} bot is connected to DeepSeek Harness.',
+  '查看最近历史消息（仅私聊）': 'Show recent history (private chats only)',
+  '按序号列出当前模型可用推理等级': 'List reasoning efforts for the current model by index',
+  '查看或切换当前推理等级': 'Show or switch the current reasoning effort',
   '/new  开启一个全新会话': '/new  Start a brand-new session',
   '/compact  压缩当前会话的较早上下文': '/compact  Compact the earlier context of the current session',
-  '/workspace 工作区绝对路径  切换工作区': '/workspace <absolute workspace path>  Switch workspace',
+  '/workspace 工作区序号或绝对路径  切换工作区':
+    '/workspace <workspace index or absolute path>  Switch workspace',
+  '设置当前对话专属工作区': 'Set a workspace dedicated to this conversation',
+  '/conv 或 /conversation  查看当前对话工作区':
+    '/conv or /conversation  Show the workspace of this conversation',
+  '/conv 工作区绝对路径或序号  设置当前对话专属工作区':
+    '/conv <workspace absolute path or index>  Set a workspace dedicated to this conversation',
+  '/conv clear  清除专属工作区，回到 bot 默认工作区':
+    '/conv clear  Clear the dedicated workspace and fall back to the bot default',
+  '对话专属：/conv 工作区序号或绝对路径（仅影响当前对话）':
+    'Dedicated to this conversation: /conv <workspace index or absolute path> (affects this conversation only)',
+  '当前对话工作区：{workspace}': 'This conversation uses the workspace: {workspace}',
+  '状态：已为该对话显式绑定，之后修改 bot 默认工作区不会影响本对话。':
+    'Status: explicitly bound for this conversation; changing the bot default workspace later will not affect it.',
+  '状态：未显式绑定，当前跟随 bot 默认工作区。':
+    'Status: not explicitly bound; this conversation currently follows the bot default workspace.',
+  '当前对话工作区已切换为：{workspace}': 'This conversation now uses the workspace: {workspace}',
+  '已清除对话专属工作区，当前使用 bot 默认工作区：{workspace}（之后默认工作区的变化会同步到本对话）':
+    'Cleared the dedicated workspace. This conversation now uses the bot default: {workspace} (later changes to that default follow here as well)',
+  '可切换的工作区（{count}）：': 'Available workspaces ({count}):',
+  '用法：/conv 工作区序号或绝对路径': 'Usage: /conv <workspace index or absolute path>',
+  '清除：/conv clear': 'Clear: /conv clear',
+  '{message}\n用法：/conv 工作区绝对路径': '{message}\nUsage: /conv <workspace absolute path>',
+  '当前机器人暂不支持按对话设置专属工作区。':
+    'This bot does not support per-conversation workspaces yet.',
+  '当前机器人暂不支持设置对话工作区。':
+    'This bot does not support setting a conversation workspace yet.',
+  '当前消息缺少可设置的对话上下文。':
+    'This message has no conversation context to bind a workspace to.',
+  '暂时无法读取当前对话工作区，请稍后重试。':
+    'This conversation workspace is temporarily unavailable. Please try again later.',
+  '暂时无法清除对话工作区，请稍后重试。':
+    'The conversation workspace could not be cleared right now. Please try again later.',
+  '机器人正在移除或已重新接入，无法读取对话工作区。':
+    'The bot is being removed or was reconnected, so the conversation workspace cannot be read.',
+  '机器人正在移除或已重新接入，无法清除对话工作区。':
+    'The bot is being removed or was reconnected, so the conversation workspace cannot be cleared.',
+  '机器人正在移除或已重新接入，无法切换对话工作区。':
+    'The bot is being removed or was reconnected, so the conversation workspace cannot be switched.',
+  '不带工作区参数时，/sessionlist 默认列出当前对话的有效工作区。':
+    'Without a workspace argument, /sessionlist lists the workspace this conversation effectively uses.',
+  '不带工作区参数时，默认列出当前对话的有效工作区（未设置对话专属工作区时即 bot 默认工作区）。':
+    'Without a workspace argument it lists the workspace this conversation effectively uses (the bot default when no conversation workspace is set).',
   '/workspacelist  列出工作区绝对路径': '/workspacelist  List absolute workspace paths',
+  '/ws、/wsl、/workspaces  工作区命令别名': '/ws, /wsl, /workspaces  Workspace command aliases',
   '/sessionlist [工作区序号或绝对路径]  列出会话 ID 和标题':
     '/sessionlist [workspace index or absolute path]  List session IDs and titles',
+  '/sessionlist 或 /sessions [工作区序号或绝对路径]  列出会话 ID 和标题':
+    '/sessionlist or /sessions [workspace index or absolute path]  List session IDs and titles',
+  '/sessionlist --limit N  仅列出当前工作区前 N 个会话':
+    '/sessionlist --limit N  List only the first N sessions in the current workspace',
   '/session Session ID 或当前工作区序号  将当前聊天绑定到指定会话':
     '/session <Session ID or workspace index>  Bind this chat to the specified session',
   '/models  按序号列出所有可用模型': '/models  List all available models by index',
@@ -129,6 +189,8 @@ export default {
   '示例：先发 /models，再发 /model 2 [推理等级ID]':
     'Example: send /models first, then /model 2 [reasoning effort ID]',
   '/presetlist  按序号列出可用 Agent Preset': '/presetlist  List available Agent Presets by index',
+  '/presetlist 或 /presets  按序号列出可用 Agent Preset':
+    '/presetlist or /presets  List available Agent Presets by index',
   '/preset [序号或完整ID]  查看或设置当前机器人 Agent Preset':
     '/preset [index or full ID]  Show or set the Agent Preset of this bot',
   '纯数字 ID：/preset id:<ID>': 'Numeric-only ID: /preset id:<ID>',
@@ -136,6 +198,7 @@ export default {
   '/stop  停止当前任务': '/stop  Stop the current task',
   '/steer 补充指令  纠偏当前任务': '/steer <additional instruction>  Steer the current task',
   '/status  检查连接状态': '/status  Check the connection status',
+  '/version  查看插件版本': '/version  Show the plugin version',
   '/help  显示本帮助': '/help  Show this help',
   '{label}机器人与 DeepSeek Harness 连接正常。':
     'The {label} bot is connected to DeepSeek Harness and working normally.',
@@ -163,4 +226,15 @@ export default {
     'Failed to submit the answer. Please resend your answer to the current question.',
   '检测到这个 Session 中遗留的待回答问题，已安全取消并继续处理你刚才的消息。':
     'A pending question left over in this Session was detected. It has been safely cancelled, and your latest message is being processed.',
+  // Inline-keyboard question cards (text-harness-bridge.mjs).
+  '该问题已处理，无需再次选择。':
+    'This question has already been handled; no further choice is needed.',
+  '只有发起当前任务的用户可以处理这条问题。':
+    'Only the user who started this task can answer this question.',
+  '正在提交你的选择，请稍候。': 'Submitting your choice, please wait.',
+  '这个选项已失效，请使用最新一条问题。':
+    'This option has expired. Please use the most recent question message.',
+  '多选问题请直接回复文字。':
+    'Please answer a multi-select question by replying with text.',
+  '已选择：{label}': 'Selected: {label}',
 };

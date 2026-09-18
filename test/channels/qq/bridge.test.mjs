@@ -3,8 +3,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { ApiError } from '@tencent-connect/qqbot-nodejs';
 
 import {
+  createQqBridgeStatus,
   qqInboundMessage,
   QqHarnessBridge,
   sendQqImage,
@@ -15,6 +17,10 @@ import {
   OutboundArtifactRegistry,
   createOutboundArtifactTool,
 } from '../../../src/channels/shared/semantic/artifact.mjs';
+import {
+  COMMAND_PERMISSION_DENIED_MESSAGE,
+  directAccessPolicy,
+} from '../access-policy-fixture.mjs';
 
 function deferred() {
   let resolve;
@@ -63,6 +69,62 @@ function message(overrides = {}) {
     ...overrides,
   };
 }
+
+test('QQ maps msgElements quote snapshots and prefers voice ASR text', () => {
+  const inbound = qqInboundMessage(message({
+    refMsgIdx: 'quoted-index-7',
+    msgElements: [{
+      content: '语音占位文字',
+      attachments: [
+        {
+          content_type: 'audio/silk',
+          filename: 'voice.silk',
+          asr_refer_text: '引用语音的识别文字',
+        },
+        { content_type: 'application/pdf', filename: '说明.pdf' },
+      ],
+    }],
+  }));
+
+  assert.equal(inbound.content, '请回答');
+  assert.deepEqual(inbound.replyTo, {
+    messageId: 'quoted-index-7',
+    content: '引用语音的识别文字',
+    attachments: [
+      { kind: 'audio', name: 'voice.silk' },
+      { kind: 'file', name: '说明.pdf' },
+    ],
+  });
+});
+
+test('QQ sends quote context to Harness but does not execute quoted commands', async () => {
+  const fixture = stateFixture([['c2c:owner-openid', 'session-quote']]);
+  let clears = 0;
+  let prompt;
+  fixture.state.clearSession = async () => { clears += 1; };
+  const bridge = new QqHarnessBridge({
+    bot: { sendText: async () => ({ id: 'qq-quote-answer' }) },
+    ownerUserOpenid: 'owner-openid',
+    harness: {
+      sessionExists: async () => true,
+      ask: async (_sessionId, content) => { prompt = content; return '已处理'; },
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message({
+    messageId: 'qq-quote-prompt',
+    content: '这条指令是什么意思？',
+    refMsgIdx: 'quoted-command',
+    msgElements: [{ content: '/new' }],
+  }));
+
+  assert.equal(clears, 0);
+  assert.equal(Array.isArray(prompt), true);
+  assert.match(prompt[0].text, /<dsh_im_reply_to>/);
+  assert.match(prompt[0].text, /"content":"\/new"/);
+  assert.deepEqual(prompt.at(-1), { type: 'text', text: '这条指令是什么意思？' });
+});
 
 async function committedArtifact(t, fileName, content, suffix) {
   const workspace = await mkdtemp(join(tmpdir(), `dsh-im-qq-artifact-${suffix}-`));
@@ -473,6 +535,74 @@ test('QQ checks sender and group mention before downloading image attachments', 
   assert.equal(asks, 0);
 });
 
+test('QQ applies the unified access policy before attachments or Harness work', async () => {
+  const fixture = stateFixture([['c2c:member-openid', 'session-member']]);
+  let downloads = 0;
+  const harnessCalls = [];
+  const sent = [];
+  const accessPolicy = directAccessPolicy({
+    users: [{ id: 'member-openid', canExecuteCommands: false }],
+    privilegedIds: ['owner-openid'],
+  });
+  const bridge = new QqHarnessBridge({
+    bot: {
+      sendText: async (_target, text) => {
+        sent.push(text);
+        return { id: `qq-policy-${sent.length}` };
+      },
+    },
+    ownerUserOpenid: 'owner-openid',
+    accessPolicy,
+    harness: {
+      sessionExists: async (sessionId) => {
+        harnessCalls.push(['sessionExists', sessionId]);
+        return true;
+      },
+      ask: async (sessionId, prompt) => {
+        harnessCalls.push(['ask', sessionId, prompt]);
+        return '白名单消息已处理';
+      },
+    },
+    state: fixture.state,
+    fetchImpl: async () => {
+      downloads += 1;
+      return new Response(PNG_BYTES, { headers: { 'content-type': 'image/png' } });
+    },
+  });
+  const directMessage = (messageId, senderId, content, overrides = {}) => message({
+    messageId,
+    senderId,
+    content,
+    replyTarget: { scope: 'c2c', targetId: senderId, msgId: messageId },
+    ...overrides,
+  });
+
+  await bridge.accept(directMessage('policy-blocked-image', 'blocked-openid', '', {
+    attachments: [{
+      content_type: 'image/png',
+      filename: 'blocked.png',
+      url: 'https://multimedia.nt.qq.com.cn/download/blocked',
+    }],
+  }));
+  assert.equal(downloads, 0);
+  assert.deepEqual(harnessCalls, []);
+  assert.deepEqual(sent, []);
+
+  await bridge.accept(directMessage('policy-member-text', 'member-openid', '普通消息'));
+  assert.equal(harnessCalls.some(([operation]) => operation === 'ask'), true);
+  assert.deepEqual(sent, ['白名单消息已处理']);
+
+  const callsBeforeDeniedCommand = harnessCalls.length;
+  const repliesBeforeDeniedCommand = sent.length;
+  await bridge.accept(directMessage('policy-member-command', 'member-openid', '/help'));
+  assert.equal(harnessCalls.length, callsBeforeDeniedCommand);
+  assert.deepEqual(sent.slice(repliesBeforeDeniedCommand), [COMMAND_PERMISSION_DENIED_MESSAGE]);
+
+  accessPolicy.getSettings().direct.allowlist.users = [];
+  await bridge.accept(directMessage('policy-owner-command', 'owner-openid', '/help'));
+  assert.match(sent.at(-1), /\/help/);
+});
+
 test('QQ rejects non-platform image URLs without fetching and returns a retryable image error', async () => {
   const fixture = stateFixture([['c2c:owner-openid', 'session-image']]);
   const sent = [];
@@ -500,8 +630,93 @@ test('QQ rejects non-platform image URLs without fetching and returns a retryabl
   }));
 
   assert.equal(downloads, 0);
-  assert.deepEqual(sent, ['图片下载失败，请重新发送后再试。']);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /^图片下载失败，请重新发送后再试。/);
+  assert.match(sent[0], /错误码：INPUT_INVALID；参考号：MF-[A-F0-9]{8}$/);
   assert.equal(fixture.seen.has('qq-image-untrusted'), true);
+});
+
+test('QQ exposes a structured model rate limit without changing connection state', async () => {
+  const fixture = stateFixture([['c2c:owner-openid', 'session-rate-limit']]);
+  const sent = [];
+  const status = {
+    ...createQqBridgeStatus(),
+    connected: true,
+    connectionState: 'connected',
+  };
+  const bridge = new QqHarnessBridge({
+    bot: {
+      sendText: async (_target, text) => {
+        sent.push(text);
+        return { id: 'qq-rate-limit-reply' };
+      },
+    },
+    ownerUserOpenid: 'owner-openid',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => {
+        const error = new Error('private QQ provider rate-limit detail');
+        error.code = 'harness-turn-failed';
+        error.providerCode = 'RATE_LIMIT';
+        throw error;
+      },
+    },
+    state: fixture.state,
+    status,
+    logger: { error() {} },
+  });
+
+  await bridge.accept(message({
+    messageId: 'qq-rate-limit',
+    content: '触发模型限流',
+    replyTarget: {
+      scope: 'c2c',
+      targetId: 'owner-openid',
+      msgId: 'qq-rate-limit',
+    },
+  }));
+
+  const failure = status.lastMessageError;
+  assert.equal(failure.code, 'MODEL_RATE_LIMIT');
+  assert.equal(failure.reason, 'HARNESS_TURN_FAILED');
+  assert.match(failure.referenceId, /^MF-[A-F0-9]{8}$/);
+  assert.match(sent.at(-1), /模型服务正在限流，本次任务未完成。请稍后重试。/);
+  assert.equal(sent.at(-1).endsWith(`参考号：${failure.referenceId}`), true);
+  assert.doesNotMatch(sent.at(-1), /private QQ provider rate-limit detail/);
+  assert.equal(status.connected, true);
+  assert.equal(status.connectionState, 'connected');
+});
+
+test('QQ does not submit a redelivered message twice when the safe failure reply cannot send', async () => {
+  const fixture = stateFixture([['c2c:owner-openid', 'session-redelivery']]);
+  let asks = 0;
+  const bridge = new QqHarnessBridge({
+    bot: {
+      sendText: async () => {
+        throw new Error('QQ reply transport unavailable');
+      },
+    },
+    ownerUserOpenid: 'owner-openid',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => {
+        asks += 1;
+        const error = new Error('private provider failure');
+        error.code = 'harness-turn-failed';
+        error.providerCode = 'RATE_LIMIT';
+        throw error;
+      },
+    },
+    state: fixture.state,
+    logger: { warn() {}, error() {} },
+  });
+  const inbound = message({ messageId: 'qq-redelivered-after-failure' });
+
+  await bridge.accept(inbound);
+  await bridge.accept(inbound);
+
+  assert.equal(asks, 1);
+  assert.equal(fixture.seen.has(inbound.messageId), true);
 });
 
 test('QQ does not use an image caption as a pending Harness answer', async () => {
@@ -673,6 +888,7 @@ test('QQ lists models and presets without prompting and advertises fast commands
   for (const command of [
     '/models', '/model', '/reasoninglist', '/reasonings', '/reasoning',
     '/presetlist', '/preset', '/preset --default', '/stop', '/steer',
+    '/version',
   ]) {
     assert.equal(help.includes(command), true, command);
   }
@@ -701,6 +917,7 @@ test('QQ remembers any authorized private inbound as a connection-test target', 
   await bridge.accept(message({
     kind: 'group',
     rawEventType: 'GROUP_AT_MESSAGE_CREATE',
+    senderId: 'group-member-openid',
     groupOpenid: 'group-1',
     messageId: 'help-group',
     content: '/help',
@@ -721,18 +938,19 @@ test('QQ remembers any authorized private inbound as a connection-test target', 
   assert.equal(sent.length, 2);
 });
 
-test('QQ private messages produce one final stream bubble', async () => {
-  const sent = [];
-  const frames = [];
+test('QQ private messages deliver the final answer as Markdown without opening a stream', async () => {
+  const markdown = [];
+  const sentText = [];
+  let streamCalls = 0;
   const seen = new Set();
   const bridge = new QqHarnessBridge({
     bot: {
-      sendText: async (_target, text) => sent.push(text),
-      openStream: () => ({
-        update: async (text) => frames.push(text),
-        complete: async () => frames.push('DONE'),
-        cancel() {},
-      }),
+      send: async (options) => {
+        markdown.push(options);
+        return { message: { id: 'qq-private-markdown' } };
+      },
+      sendText: async (_target, text) => sentText.push(text),
+      openStream: () => { streamCalls += 1; },
     },
     ownerUserOpenid: 'owner-openid',
     harness: {
@@ -755,44 +973,19 @@ test('QQ private messages produce one final stream bubble', async () => {
     },
   });
 
-  await bridge.accept(message());
-  assert.deepEqual(frames, ['最终回答', 'DONE']);
-  assert.deepEqual(sent, []);
+  const receipt = await bridge.accept(message());
+  assert.equal(markdown.length, 1);
+  assert.equal(markdown[0].msgType, 2);
+  assert.equal(markdown[0].markdown.content, '最终回答');
+  assert.deepEqual(markdown[0].target, {
+    scope: 'c2c', targetId: 'owner-openid', msgId: 'msg-1',
+  });
+  assert.equal(Number.isInteger(markdown[0].extra.msg_seq), true);
+  assert.deepEqual(sentText, []);
+  assert.equal(streamCalls, 0);
   assert.equal(seen.has('msg-1'), true);
   assert.equal(bridge.status.messagesReplied, 1);
-});
-
-test('QQ does not duplicate a visible private answer when stream completion fails', async () => {
-  const frames = [];
-  const sent = [];
-  const bridge = new QqHarnessBridge({
-    bot: {
-      sendText: async (_target, text) => sent.push(text),
-      openStream: () => ({
-        update: async (text) => frames.push(text),
-        complete: async () => { throw new Error('already submitted'); },
-        cancel() {},
-      }),
-    },
-    ownerUserOpenid: 'owner-openid',
-    harness: {
-      sessionExists: async () => true,
-      ask: async () => '最终回答',
-    },
-    state: {
-      hasSeen: () => false,
-      markSeen: async () => {},
-      sessionFor: () => 'session-stream-complete-failure',
-      setSession: async () => {},
-      clearSession: async () => {},
-    },
-    logger: { warn() {}, error() {} },
-  });
-
-  await bridge.accept(message({ messageId: 'msg-stream-complete-failure' }));
-  assert.deepEqual(frames, ['最终回答']);
-  assert.deepEqual(sent, []);
-  assert.equal(bridge.status.messagesReplied, 1);
+  assert.deepEqual(receipt.providerMessageIds, ['qq-private-markdown']);
 });
 
 test('QQ group messages suppress every successful progress update', async () => {
@@ -835,7 +1028,7 @@ test('QQ group messages suppress every successful progress update', async () => 
   assert.equal(streamCalls, 0);
 });
 
-test('QQ group messages append tool failures to one final answer', async () => {
+test('QQ group messages append a stable tool failure notice without exposing provider details', async () => {
   const sent = [];
   const bridge = new QqHarnessBridge({
     bot: {
@@ -876,8 +1069,9 @@ test('QQ group messages append tool failures to one final answer', async () => {
     replyTarget: { scope: 'group', targetId: 'group-error', msgId: 'msg-tool-error' },
   }));
   assert.deepEqual(sent, [
-    '已存入两套记忆。\n\n---\n\nTool call add_observations\nError: Error calling add_observations. Status code: 404.',
+    '已存入两套记忆。\n\n---\n\n工具调用「add_observations」未成功，请检查工具配置或稍后重试。',
   ]);
+  assert.doesNotMatch(sent[0], /Error calling|Status code|404/);
 });
 
 test('QQ delivers final group answers as markdown messages', async () => {
@@ -925,8 +1119,20 @@ test('QQ falls back to plain text when the platform rejects markdown', async () 
   const sentText = [];
   const bridge = new QqHarnessBridge({
     bot: {
-      sendText: async (_target, text) => sentText.push(text),
-      send: async () => { throw new Error('markdown rejected'); },
+      sendText: async () => { throw new Error('fallback must explicitly use msg_type=0'); },
+      send: async (options) => {
+        if (options.msgType === 2) {
+          throw new ApiError(
+            'markdown rejected',
+            400,
+            '/v2/users/test/messages',
+            40_034_090,
+            'markdown rejected',
+          );
+        }
+        sentText.push(options.content);
+        return { id: 'plain-fallback' };
+      },
     },
     ownerUserOpenid: 'owner-openid',
     harness: {
@@ -1012,8 +1218,8 @@ test('QQ keeps a stopped turn terminal when its notice cannot be sent', async ()
   assert.equal(fixture.seen.has('qq-stopped-stream-fallback'), true);
 });
 
-test('QQ bridge accepts only the scanner and requires an at-message event in groups', async () => {
-  let asks = 0;
+test('QQ bridge keeps private chats scanner-only and accepts any mentioned group member', async () => {
+  const asks = [];
   const state = {
     hasSeen: () => false,
     markSeen: async () => {},
@@ -1025,15 +1231,31 @@ test('QQ bridge accepts only the scanner and requires an at-message event in gro
   const bridge = new QqHarnessBridge({
     bot: { sendText: async () => {} },
     ownerUserOpenid: 'owner-openid',
-    harness: { sessionExists: async () => true, ask: async () => { asks += 1; return 'ok'; } },
+    harness: {
+      sessionExists: async () => true,
+      ask: async (sessionId, text) => { asks.push({ sessionId, text }); return 'ok'; },
+    },
     state,
   });
   await bridge.accept(message({ messageId: 'other', senderId: 'other-openid' }));
   await bridge.accept(message({
-    messageId: 'group', kind: 'group', groupOpenid: 'group-1', rawEventType: 'GROUP_MESSAGE_CREATE',
-    replyTarget: { scope: 'group', targetId: 'group-1', msgId: 'group' },
+    messageId: 'group-unmentioned',
+    kind: 'group',
+    senderId: 'other-member-openid',
+    groupOpenid: 'group-1',
+    rawEventType: 'GROUP_MESSAGE_CREATE',
+    replyTarget: { scope: 'group', targetId: 'group-1', msgId: 'group-unmentioned' },
   }));
-  assert.equal(asks, 0);
+  await bridge.accept(message({
+    messageId: 'group-mentioned',
+    kind: 'group',
+    senderId: 'other-member-openid',
+    groupOpenid: 'group-1',
+    rawEventType: 'GROUP_AT_MESSAGE_CREATE',
+    content: '群成员的问题',
+    replyTarget: { scope: 'group', targetId: 'group-1', msgId: 'group-mentioned' },
+  }));
+  assert.deepEqual(asks, [{ sessionId: 'session', text: '群成员的问题' }]);
   assert.equal(bridge.status.messagesRejected, 1);
 });
 
@@ -2004,6 +2226,12 @@ test('QQ sends registered files after text with the native SDK and continues aft
   assert.equal(files[1].source.buffer.toString(), '<h1>second</h1>');
   assert.equal(files[1].options.fileName, 'second.html');
   assert.match(sentTexts[1].text, /first\.txt.*上传额度/);
+  assert.equal(status.lastMessageError.code, 'CHANNEL_RATE_LIMIT');
+  assert.equal(status.lastMessageError.reason, 'ARTIFACT_RATE_LIMITED');
+  assert.equal(
+    sentTexts[1].text.endsWith(`参考号：${status.lastMessageError.referenceId}`),
+    true,
+  );
   assert.doesNotMatch(sentTexts[1].text, /private quota detail/);
   assert.equal(status.artifactsSent, 1);
   assert.equal(status.artifactSendErrors, 1);
@@ -2040,6 +2268,8 @@ test('QQ still delivers registered files when every final text delivery attempt 
 
   assert.deepEqual(files, [{ bytes: Buffer.from('file bytes'), fileName: 'survives-text-failure.txt' }]);
   assert.equal(textAttempts, 1, 'must not send a generic retry notice after the file succeeds');
+  assert.equal(bridge.status.lastMessageError.code, 'CHANNEL_DELIVERY_UNCERTAIN');
+  assert.match(bridge.status.lastMessageError.referenceId, /^MF-[A-F0-9]{8}$/);
 });
 
 test('QQ returns the authoritative receipt and sends one safe notice when text and file delivery fail', async (t) => {
@@ -2121,7 +2351,8 @@ test('QQ keeps the generic error when neither the answer nor the file failure no
   await bridge.accept(message({ messageId: 'qq-no-visible-failure' }));
 
   assert.equal(attemptedTexts.length, 3);
-  assert.equal(attemptedTexts.at(-1), '消息处理失败，请稍后重试。');
+  assert.match(attemptedTexts.at(-1), /^回复发送结果未能确认/);
+  assert.match(attemptedTexts.at(-1), /错误码：CHANNEL_DELIVERY_UNCERTAIN；参考号：MF-[A-F0-9]{8}$/);
 });
 
 test('QQ reports an unacknowledged native file send as uncertain instead of inviting a blind retry', async (t) => {
@@ -2272,15 +2503,21 @@ test('QQ private batch input submits once, cancels cleanly, and restores normal 
   });
 
   await bridge.accept(inbound('qq-batch-start', '/batch'));
+  await bridge.accept(inbound('qq-batch-quote', 'QQ 引用不能收录', {
+    refMsgIdx: 'qq-batch-ref',
+    msgElements: [{ content: '被引用内容' }],
+  }));
   await bridge.accept(inbound('qq-batch-one', '第一条'));
   await bridge.accept(inbound('qq-batch-two', '第二条'));
   assert.deepEqual(asked, []);
-  assert.equal(sent.length, 1);
+  assert.equal(sent.length, 2);
+  assert.match(sent[1], /引用消息.*未收录/s);
 
   await bridge.accept(inbound('qq-batch-send', '/send'));
   assert.equal(asked.length, 1);
   assert.match(asked[0], /\[消息 1\]\n第一条/);
   assert.match(asked[0], /\[消息 2\]\n第二条/);
+  assert.doesNotMatch(asked[0], /QQ 引用不能收录/);
   assert.equal(sent.at(-1), '批量完成');
 
   await bridge.accept(inbound('qq-cancel-start', '/batch'));

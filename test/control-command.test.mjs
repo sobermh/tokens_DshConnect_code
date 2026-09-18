@@ -6,6 +6,7 @@ import {
   runControlCommand,
 } from '../src/channels/shared/control-command.mjs';
 import { HarnessApprovalQueue } from '../src/channels/shared/harness-approval.mjs';
+import { captureContextEnhancementSource } from '../src/channels/shared/context-enhancement.mjs';
 
 function fixture({ sessionId = 'session-one', stopped = true, steered = true } = {}) {
   const calls = [];
@@ -36,12 +37,29 @@ function fixture({ sessionId = 'session-one', stopped = true, steered = true } =
 test('isControlCommand reserves valid and malformed control command forms', () => {
   for (const value of [
     '/stop', ' /STOP ', '/stop now', '/steer', '/StEeR do this', '/steer line one\nline two',
+    '/version', ' /VERSION ', '/version now',
   ]) {
     assert.equal(isControlCommand(value), true, value);
   }
-  for (const value of [null, '', 'stop', '/stopping', '/steering', 'hello /stop']) {
+  for (const value of [null, '', 'stop', '/stopping', '/steering', '/versions', 'hello /stop']) {
     assert.equal(isControlCommand(value), false, String(value));
   }
+});
+
+test('/version returns the package version without touching Harness or Session state', async () => {
+  const { calls, harness, state } = fixture();
+  const { version } = await import('../package.json', { with: { type: 'json' } })
+    .then((module) => module.default);
+
+  assert.deepEqual(
+    await runControlCommand('/VERSION', harness, state, 'direct:one'),
+    { message: `dsh-im v${version}` },
+  );
+  assert.match(
+    (await runControlCommand('/version details', harness, state, 'direct:one')).message,
+    /用法/,
+  );
+  assert.equal(calls.length, 0);
 });
 
 test('/stop is exact, text-only, and never creates a Session', async () => {
@@ -165,4 +183,48 @@ test('HarnessApprovalQueue exposes whether a route has a live approval', async (
   assert.equal(queue.hasPending('direct:other'), false);
   await queue.closeRoute('direct:one');
   assert.equal(queue.hasPending('direct:one'), false);
+});
+
+test('/steer carries the source block of whoever issued it', async () => {
+  const { harness, state, calls } = fixture();
+  const enhancement = captureContextEnhancementSource({
+    botId: 'bot_one',
+    getSettings: () => ({
+      group: { enabled: true, fields: ['channel', 'senderId'], guidance: '' },
+      direct: { enabled: false, fields: [], guidance: '' },
+    }),
+  }, 'group', () => ({ channel: 'weixin', senderId: 'wx-1' }));
+  assert.notEqual(enhancement, null);
+
+  const control = { owner: {}, key: 'group:g1' };
+  const result = await runControlCommand('/steer 别删这个文件', harness, state, 'group:g1', {
+    control,
+    enhancement,
+  });
+  assert.match(result.message, /已提交/);
+  assert.deepEqual(calls.find(([method]) => method === 'steerActiveTurn'), [
+    'steerActiveTurn',
+    'session-one',
+    '<dsh_im_source>{"channel":"weixin","senderId":"wx-1"}</dsh_im_source>\n\n别删这个文件',
+    control,
+    {},
+  ]);
+});
+
+test('/steer without an enhancement still sends the bare instruction', async () => {
+  const { harness, state, calls } = fixture();
+  await runControlCommand('/steer 原样发送', harness, state, 'direct:one', {
+    control: { owner: {}, key: 'direct:one' },
+  });
+  assert.equal(calls.find(([method]) => method === 'steerActiveTurn')[2], '原样发送');
+});
+
+test('a scope that is off captures no enhancement for a command', () => {
+  assert.equal(captureContextEnhancementSource({
+    botId: 'bot_one',
+    getSettings: () => ({
+      group: { enabled: false, fields: [], guidance: '' },
+      direct: { enabled: false, fields: [], guidance: '' },
+    }),
+  }, 'group', () => ({ channel: 'weixin' })), null);
 });

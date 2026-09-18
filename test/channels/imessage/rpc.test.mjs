@@ -20,7 +20,7 @@ function controller(overrides = {}) {
   };
 }
 
-test('iMessage RPC exposes native permission failures with details', async () => {
+test('iMessage RPC failures include details for the DSH connection envelope', async () => {
   const handle = createIMessageRpcHandler(controller({
     bindNative: async () => {
       const error = new Error('请授予完全磁盘访问权限');
@@ -29,7 +29,8 @@ test('iMessage RPC exposes native permission failures with details', async () =>
     },
   }));
 
-  assert.deepEqual(await handle(IMESSAGE_ENDPOINTS.bindNative, {}, undefined), {
+  const result = await handle(IMESSAGE_ENDPOINTS.bindNative, {}, undefined);
+  assert.deepEqual(result, {
     ok: false,
     error: {
       code: 'messages-database-permission-required',
@@ -39,7 +40,7 @@ test('iMessage RPC exposes native permission failures with details', async () =>
   });
 });
 
-test('iMessage status RPC returns bot snapshot and queried permissions', async () => {
+test('iMessage status RPC returns the awaited bot snapshot and permissions', async () => {
   const handle = createIMessageRpcHandler(controller({
     status: async () => ({
       schemaVersion: 1,

@@ -1,7 +1,7 @@
 import { t } from '../shared/i18n.mjs';
 
 const DEFAULT_UPDATE_INTERVAL_MS = 500;
-const FAILURE_TEXT = '消息处理失败，请稍后重试。';
+const CLOSED_TEXT = '卡片已结束，请查看后续消息。';
 
 function requiredText(value, name) {
   if (typeof value !== 'string') throw new TypeError(`${name} must be a string`);
@@ -32,7 +32,7 @@ function requiredCredential(value, name) {
  * @param {number} [options.updateIntervalMs=500] Minimum delay between updates.
  * @param {()=>number} [options.clock] Monotonic millisecond clock.
  * @param {{setTimeout: Function, clearTimeout: Function}} [options.timer] Timer implementation.
- * @returns {{start(initialText: string): Promise<boolean>, push(progressText: string): void, finish(finalText: string): Promise<boolean>}}
+ * @returns {{start(initialText: string): Promise<boolean>, push(progressText: string): void, finish(finalText: string): Promise<boolean>, readonly providerMessageIds: string[]}}
  * Card stream controller.
  */
 export function createDingTalkCardStream({
@@ -102,7 +102,7 @@ export function createDingTalkCardStream({
     if (!cleanupPromise) {
       cleanupPromise = api.failAiCard({
         ...cardRequest,
-        text: t(FAILURE_TEXT),
+        text: t(CLOSED_TEXT),
         signal: AbortSignal.timeout(5_000),
       }).then(
         () => true,
@@ -231,5 +231,12 @@ export function createDingTalkCardStream({
     return finishPromise;
   };
 
-  return Object.freeze({ start, push, finish });
+  return Object.freeze({
+    start,
+    push,
+    finish,
+    get providerMessageIds() {
+      return cardRequest?.cardInstanceId ? [cardRequest.cardInstanceId] : [];
+    },
+  });
 }

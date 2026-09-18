@@ -7,11 +7,7 @@ import { createTokenProductionController } from '../shared/production.mjs';
 
 export function createProductionController(ctx, config = {}, internals = {}) {
   return createTokenProductionController(ctx, config, internals, {
-    channel: 'imessage',
-    ConfigStore: IMessageConfigStore,
-    StateStore: IMessageStateStore,
-    HarnessClient: IMessageHarnessClient,
-    Controller: IMessageController,
-    Runtime: IMessageRuntime,
+    channel: 'imessage', ConfigStore: IMessageConfigStore, StateStore: IMessageStateStore,
+    HarnessClient: IMessageHarnessClient, Controller: IMessageController, Runtime: IMessageRuntime,
   });
 }

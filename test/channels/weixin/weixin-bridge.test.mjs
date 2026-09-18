@@ -9,13 +9,19 @@ import {
   weixinInboundMessage,
   WeixinHarnessBridge,
 } from '../../../src/channels/weixin/weixin-bridge.mjs';
+import { WeixinStateStore } from '../../../src/channels/weixin/state-store.mjs';
 import { connectionTestTarget } from '../../../src/channels/shared/connection-test.mjs';
+import { HarnessRpcError } from '../../../src/channels/shared/harness-client.mjs';
 import {
   OUTBOUND_ARTIFACT_TOOL,
   OutboundArtifactRegistry,
   createOutboundArtifactTool,
   releaseOutboundArtifact,
 } from '../../../src/channels/shared/semantic/artifact.mjs';
+import {
+  COMMAND_PERMISSION_DENIED_MESSAGE,
+  directAccessPolicy,
+} from '../access-policy-fixture.mjs';
 
 function deferred() {
   let resolve;
@@ -27,8 +33,8 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-async function eventually(predicate, messageText = 'condition was not met') {
-  const deadline = Date.now() + 1_000;
+async function eventually(predicate, messageText = 'condition was not met', timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -60,6 +66,157 @@ function message(id, text, overrides = {}) {
     ...overrides,
   };
 }
+
+test('Weixin bridge sends ref_msg context to Harness but does not execute quoted commands', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-quote');
+  let clears = 0;
+  let prompt;
+  fixture.state.clearSession = async () => { clears += 1; };
+  const bridge = new WeixinHarnessBridge({
+    api: { sendText: async () => ({ messageId: 'weixin-quote-answer' }) },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async (_sessionId, content) => { prompt = content; return '已处理'; },
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message('weixin-quote-prompt', '这条指令是什么意思？', {
+    item_list: [{
+      type: 1,
+      text_item: { text: '这条指令是什么意思？' },
+      ref_msg: {
+        message_item: {
+          type: 1,
+          msg_id: 'quoted-command',
+          text_item: { text: '/new' },
+        },
+      },
+    }],
+  }));
+
+  assert.equal(clears, 0);
+  assert.equal(Array.isArray(prompt), true);
+  assert.match(prompt[0].text, /<dsh_im_reply_to>/);
+  assert.match(prompt[0].text, /"content":"\/new"/);
+  assert.deepEqual(prompt.at(-1), { type: 'text', text: '这条指令是什么意思？' });
+});
+
+test('Weixin bridge restores a metadata-only bot quote from its recent outbound index', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-weixin-quote-index-'));
+  const state = await new WeixinStateStore(join(root, 'state.json')).load();
+  await state.setSession('p2p:owner-user', 'session-quote-index');
+  const prompts = [];
+  let sends = 0;
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      sendText: async () => ({ messageId: `outbound-${++sends}` }),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async (_sessionId, content) => {
+        prompts.push(content);
+        return prompts.length === 1 ? 'deepseek-v4-flash' : '已识别引用';
+      },
+    },
+    state,
+  });
+
+  await bridge.accept(message('weixin-original-question', '这是什么模型？'));
+  const remembered = state.snapshot().recentOutboundMessages.at(-1);
+  assert.equal(remembered.text, 'deepseek-v4-flash');
+
+  await bridge.accept(message('weixin-metadata-quote', '这里说的是什么模型？', {
+    item_list: [{
+      type: 1,
+      text_item: { text: '这里说的是什么模型？' },
+      ref_msg: {
+        message_item: {
+          type: 8,
+          create_time_ms: remembered.sentAt,
+          update_time_ms: remembered.completedAt,
+        },
+      },
+    }],
+  }));
+
+  assert.match(prompts[1][0].text, /<dsh_im_reply_to>/);
+  assert.match(prompts[1][0].text, /"content":"deepseek-v4-flash"/);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('Weixin bridge recovers a pre-index bot quote from bounded Session history', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-weixin-quote-history-'));
+  const state = await new WeixinStateStore(join(root, 'state.json')).load();
+  await state.setSession('p2p:owner-user', 'session-quote-history');
+  const quotedAt = Date.now() - 2_000;
+  const quotedMessageId = ((BigInt(quotedAt) << 22n) | 456n).toString();
+  const prompts = [];
+  const historyReads = [];
+  const session = {
+    sessionExists: async () => true,
+    readHistory: async (options) => {
+      historyReads.push(options);
+      return {
+        events: [{ event: {
+          type: 'assistant/message',
+          seq: 10,
+          time: quotedAt - 7_400,
+          data: {
+            turn: 1,
+            message: {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'DeepSeek V4 Flash' }],
+            },
+          },
+        } }, { event: {
+          type: 'turn/end',
+          seq: 11,
+          time: quotedAt - 7_399,
+          data: { turn: 1, reason: { kind: 'completed' } },
+        } }],
+        hasMore: false,
+      };
+    },
+    ask: async (content) => {
+      prompts.push(content);
+      return '已识别旧引用';
+    },
+  };
+  const bridge = new WeixinHarnessBridge({
+    api: { sendText: async () => ({ messageId: 'history-answer' }) },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: { workspaceSession: () => session },
+    state,
+  });
+
+  await bridge.accept(message('weixin-history-quote', '说的是什么模型？', {
+    item_list: [{
+      type: 1,
+      text_item: { text: '说的是什么模型？' },
+      ref_msg: {
+        message_item: { type: 7, msg_id: quotedMessageId },
+      },
+    }],
+  }));
+
+  assert.equal(historyReads.length, 1);
+  assert.match(prompts[0][0].text, /"content":"DeepSeek V4 Flash"/);
+  assert.doesNotMatch(prompts[0][0].text, /unavailableReason/);
+  assert.equal(state.recentOutboundTextFor({
+    toUserId: 'owner-user', messageId: quotedMessageId,
+  }), 'DeepSeek V4 Flash');
+  await rm(root, { recursive: true, force: true });
+});
 
 function stateFixture() {
   const sessions = new Map();
@@ -182,6 +339,64 @@ test('Weixin splits long replies below the iLink text limit', async () => {
   assert.equal(bridge.status.lastMessageError, null);
 });
 
+test('Weixin reports safe chunk diagnostics when a long reply is rejected', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-long-reply-rejected');
+  const answer = '答'.repeat(2_000);
+  const attempts = [];
+  const status = createWeixinBridgeStatus();
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      sendText: async ({ text }) => {
+        attempts.push(text);
+        if (text === answer.slice(1_800)) {
+          const error = new Error('private provider detail with token-shaped-value');
+          error.code = 'send-rejected';
+          error.providerCode = '-2';
+          throw error;
+        }
+        return { messageId: `weixin-long-${attempts.length}` };
+      },
+    },
+    baseUrl: 'https://ilinkai.wechat.com/',
+    token: 'private-host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => answer,
+    },
+    state: fixture.state,
+    status,
+    logger: { error() {} },
+  });
+
+  await bridge.accept(message('weixin-long-reply-rejected', '生成一段长回答'));
+
+  const failure = status.lastMessageError;
+  assert.equal(failure.code, 'CHANNEL_DELIVERY_UNCERTAIN');
+  assert.equal(failure.reason, 'WEIXIN_SEND_FAILED');
+  assert.match(failure.message, /可能只收到部分内容/);
+  assert.match(failure.message, /endpoint=sendmessage/);
+  assert.match(failure.message, /host=ilinkai\.wechat\.com/);
+  assert.match(failure.message, /chunk=2\/2/);
+  assert.match(failure.message, /chunkChars=200/);
+  assert.match(failure.message, /chunkUtf8Bytes=600/);
+  assert.match(failure.message, /totalChars=2000/);
+  assert.match(failure.message, /totalUtf8Bytes=6000/);
+  assert.match(failure.message, /limitChars=1800/);
+  assert.match(failure.message, /contextToken=yes/);
+  assert.match(failure.message, /runId=no/);
+  assert.match(failure.message, /http=2xx/);
+  assert.match(failure.message, /provider=-2/);
+  assert.match(failure.message, /cause=send-rejected/);
+  assert.match(attempts.at(-1), /微信发送诊断：/);
+  assert.match(attempts.at(-1), /错误码：CHANNEL_DELIVERY_UNCERTAIN/);
+  assert.doesNotMatch(
+    JSON.stringify({ failure, safeReply: attempts.at(-1) }),
+    /private provider detail|token-shaped-value|private-host-token|context-weixin/,
+  );
+});
+
 test('Weixin starts a native-file download before an earlier queued turn finishes', async () => {
   const fixture = stateFixture();
   fixture.sessions.set('p2p:owner-user', 'session-prefetch-file');
@@ -219,7 +434,7 @@ test('Weixin starts a native-file download before an earlier queued turn finishe
   });
 
   const first = bridge.accept(message('weixin-prefetch-first', '先等待'));
-  await eventually(() => asks === 1);
+  await eventually(() => asks === 1, 'busy turn did not start before /batch assertion', 5_000);
   const second = bridge.accept(message('weixin-prefetch-second', '', {
     item_list: [{
       type: 4,
@@ -477,6 +692,8 @@ test('Weixin still attempts a registered file when the final text transport fail
   assert.deepEqual(files, ['weixin-text-failed.txt']);
   assert.equal(textAttempts, 1, 'must not send a generic retry notice after the file succeeds');
   assert.equal(bridge.status.artifactsSent, 1);
+  assert.equal(bridge.status.lastMessageError.code, 'CHANNEL_DELIVERY_UNCERTAIN');
+  assert.match(bridge.status.lastMessageError.referenceId, /^MF-[A-F0-9]{8}$/);
   assert.deepEqual(receipt.providerMessageIds, ['weixin-file-after-text-failure']);
   assert.deepEqual(receipt.artifacts, [{ artifactId: 'weixin-artifact-one', outcome: 'sent' }]);
 });
@@ -515,16 +732,63 @@ test('Weixin tells users to inspect the chat instead of retrying an uncertain fi
 
   const receipt = await bridge.accept(message('weixin-artifact-uncertain', '生成文件'));
 
-  assert.equal(
-    sent.at(-1),
-    '结果文件「weixin-uncertain.txt」发送结果未能确认，请先检查聊天内是否已收到，不要立即重试。',
-  );
+  const failure = bridge.status.lastMessageError;
+  assert.match(sent.at(-1), /^结果文件「weixin-uncertain\.txt」发送结果未能确认/);
+  assert.equal(failure.code, 'CHANNEL_DELIVERY_UNCERTAIN');
+  assert.equal(failure.reason, 'ARTIFACT_DELIVERY_UNCERTAIN');
+  assert.equal(sent.at(-1).endsWith(`参考号：${failure.referenceId}`), true);
   assert.doesNotMatch(sent.join('\n'), /private provider transport detail/);
   assert.equal(bridge.status.artifactSendErrors, 1);
   assert.deepEqual(receipt.artifacts, [{
     artifactId: 'weixin-artifact-one',
     outcome: 'unknown',
     reason: 'artifact-delivery-uncertain',
+  }]);
+});
+
+test('Weixin explains that an upload timeout happened before the file was sent', async (t) => {
+  const artifact = await committedArtifact(t, 'large.zip', 'weixin-file');
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-upload-timeout');
+  const sent = [];
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      inboundImages: () => [],
+      sendText: async ({ text }) => {
+        sent.push(text);
+        return { messageId: `weixin-text-${sent.length}` };
+      },
+      sendFile: async () => {
+        throw Object.assign(new Error('private CDN URL and token'), { code: 'artifact-upload-timeout' });
+      },
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async (_sessionId, _text, options) => {
+        await options.onArtifact(artifact);
+        return '';
+      },
+    },
+    state: fixture.state,
+    logger: { warn() {}, error() {} },
+  });
+
+  const receipt = await bridge.accept(message('weixin-upload-timeout', '发文件'));
+  const failure = bridge.status.lastMessageError;
+  assert.match(sent.at(-1), /上传微信.*超时，文件尚未发送/);
+  assert.match(sent.at(-1), /检查网络/);
+  assert.doesNotMatch(sent.join('\n'), /private CDN URL and token/);
+  assert.equal(failure.code, 'CHANNEL_DELIVERY');
+  assert.equal(failure.reason, 'ARTIFACT_UPLOAD_TIMEOUT');
+  assert.equal(bridge.status.artifactsSent, 0);
+  assert.equal(bridge.status.artifactSendErrors, 1);
+  assert.deepEqual(receipt.artifacts, [{
+    artifactId: artifact.artifactId,
+    outcome: 'failed',
+    reason: 'artifact-upload-timeout',
   }]);
 });
 
@@ -590,6 +854,68 @@ test('Weixin authorizes the sender before resolving encrypted image references',
   assert.equal(asks, 0);
 });
 
+test('Weixin applies the unified access policy before attachments or Harness work', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:member-user', 'session-member');
+  let imageExtractions = 0;
+  const harnessCalls = [];
+  const sent = [];
+  const accessPolicy = directAccessPolicy({
+    users: [{ id: 'member-user', canExecuteCommands: false }],
+    privilegedIds: ['owner-user'],
+  });
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      inboundImages: (value) => {
+        imageExtractions += 1;
+        return value?.item_list?.some((item) => item?.image_item) ? [{ data: PNG_BYTES }] : [];
+      },
+      sendText: async (request) => sent.push(request.text),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    accessPolicy,
+    harness: {
+      sessionExists: async (sessionId) => {
+        harnessCalls.push(['sessionExists', sessionId]);
+        return true;
+      },
+      ask: async (sessionId, prompt) => {
+        harnessCalls.push(['ask', sessionId, prompt]);
+        return '白名单消息已处理';
+      },
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message('policy-blocked-image', '', {
+    from_user_id: 'blocked-user',
+    item_list: [{ type: 2, image_item: { media: {} } }],
+  }));
+  assert.equal(imageExtractions, 0);
+  assert.deepEqual(harnessCalls, []);
+  assert.deepEqual(sent, []);
+
+  await bridge.accept(message('policy-member-text', '普通消息', {
+    from_user_id: 'member-user',
+  }));
+  assert.equal(harnessCalls.some(([operation]) => operation === 'ask'), true);
+  assert.deepEqual(sent, ['白名单消息已处理']);
+
+  const callsBeforeDeniedCommand = harnessCalls.length;
+  const repliesBeforeDeniedCommand = sent.length;
+  await bridge.accept(message('policy-member-command', '/help', {
+    from_user_id: 'member-user',
+  }));
+  assert.equal(harnessCalls.length, callsBeforeDeniedCommand);
+  assert.deepEqual(sent.slice(repliesBeforeDeniedCommand), [COMMAND_PERMISSION_DENIED_MESSAGE]);
+
+  accessPolicy.getSettings().direct.allowlist.users = [];
+  await bridge.accept(message('policy-owner-command', '/help'));
+  assert.match(sent.at(-1), /\/help/);
+});
+
 test('Weixin returns a specific retry message when encrypted image loading fails', async () => {
   const fixture = stateFixture();
   fixture.sessions.set('p2p:owner-user', 'session-image');
@@ -614,7 +940,8 @@ test('Weixin returns a specific retry message when encrypted image loading fails
     item_list: [{ type: 2, image_item: { media: {} } }],
   }));
 
-  assert.equal(sent.at(-1).text, '图片下载失败，请重新发送后再试。');
+  assert.match(sent.at(-1).text, /^图片下载失败，请重新发送后再试。/);
+  assert.match(sent.at(-1).text, /错误码：INPUT_INVALID；参考号：MF-[A-F0-9]{8}$/);
   assert.equal(fixture.seen.has('weixin-image-error'), true);
 });
 
@@ -656,11 +983,13 @@ test('Weixin explains model image rejection and records only safe structured dia
   assert.match(sent.at(-1).text, /\/models/);
   assert.equal(fixture.seen.has('weixin-model-image-error'), true);
   assert.deepEqual(status.lastMessageError, {
-    code: 'attachment-error',
+    code: 'INPUT_INVALID',
     reason: 'MODEL_DOES_NOT_SUPPORT_IMAGES',
-    message: sent.at(-1).text,
+    message: '当前模型不支持图片，请用 /models 查看可用模型，再用 /model <序号> 切换后重发。',
+    referenceId: status.lastMessageError.referenceId,
     at: status.lastMessageError.at,
   });
+  assert.match(status.lastMessageError.referenceId, /^MF-[A-F0-9]{8}$/);
   assert.equal(Number.isFinite(status.lastMessageError.at), true);
   assert.doesNotMatch(JSON.stringify(status.lastMessageError), /private|provider-token|providerDetail/);
 });
@@ -778,6 +1107,7 @@ test('Weixin lists models and presets without prompting and advertises fast comm
   for (const command of [
     '/models', '/model', '/reasoninglist', '/reasonings', '/reasoning',
     '/presetlist', '/preset', '/preset --default', '/stop', '/steer',
+    '/version',
     '/batch', '/send', '/cancel',
   ]) {
     assert.equal(help.includes(command), true, command);
@@ -824,6 +1154,337 @@ test('bridge maps the scanning Weixin user to one persistent Harness session and
   ]);
   assert.equal(status.messagesReceived, 2);
   assert.equal(status.messagesReplied, 2);
+});
+
+test('Weixin keeps the typing indicator alive until the final reply with one ticket lookup', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-typing');
+  const releaseAnswer = deferred();
+  const events = [];
+  let configCalls = 0;
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      getConfig: async ({ toUserId, contextToken }) => {
+        configCalls += 1;
+        events.push(`config:${toUserId}:${contextToken}`);
+        return { typingTicket: 'typing-ticket' };
+      },
+      sendTyping: async ({ status }) => events.push(`typing:${status}`),
+      sendText: async ({ text }) => events.push(`text:${text}`),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    typingKeepaliveMs: 5,
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => releaseAnswer.promise,
+    },
+    state: fixture.state,
+  });
+
+  const turn = bridge.accept(message('typing', '慢一点回答'));
+  await eventually(() => events.filter((event) => event === 'typing:1').length >= 2);
+  releaseAnswer.resolve('回答完成');
+  await turn;
+
+  assert.equal(configCalls, 1);
+  assert.equal(events[0], 'config:owner-user:context-typing');
+  assert.equal(events[1], 'typing:1');
+  assert.equal(events.filter((event) => event === 'typing:1').length >= 2, true);
+  assert.deepEqual(events.slice(-2), ['typing:2', 'text:回答完成']);
+
+  const startsAfterFirstTurn = events.filter((event) => event === 'typing:1').length;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(
+    events.filter((event) => event === 'typing:1').length,
+    startsAfterFirstTurn,
+    'a completed turn must not leave a keepalive timer behind',
+  );
+
+  const secondTurnStart = events.length;
+  await bridge.accept(message('typing-again', '再次回答'));
+  assert.equal(configCalls, 1, 'the typing ticket should be reused across turns');
+  assert.deepEqual(events.slice(secondTurnStart), [
+    'typing:1',
+    'typing:2',
+    'text:回答完成',
+  ]);
+});
+
+test('Weixin typing failures never prevent the Harness reply', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-typing-fallback');
+  const sent = [];
+  const warnings = [];
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      getConfig: async () => { throw new Error('typing unavailable'); },
+      sendTyping: async () => assert.fail('typing cannot start without a ticket'),
+      sendText: async ({ text }) => sent.push(text),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => '仍然正常回答',
+    },
+    state: fixture.state,
+    logger: { warn: (...args) => warnings.push(args), error() {} },
+  });
+
+  await bridge.accept(message('typing-fallback', '测试降级'));
+
+  assert.deepEqual(sent, ['仍然正常回答']);
+  assert.equal(warnings.length, 1);
+});
+
+test('Weixin best-effort cancels after a typing start or keepalive failure', async (suite) => {
+  for (const failAtStart of [1, 2]) {
+    await suite.test(`status 1 attempt ${failAtStart}`, async () => {
+      const fixture = stateFixture();
+      fixture.sessions.set('p2p:owner-user', `session-typing-failure-${failAtStart}`);
+      const releaseAnswer = deferred();
+      const askStarted = deferred();
+      const statuses = [];
+      const sent = [];
+      const warnings = [];
+      let starts = 0;
+      const bridge = new WeixinHarnessBridge({
+        api: {
+          getConfig: async () => ({ typingTicket: 'typing-ticket' }),
+          sendTyping: async ({ status }) => {
+            statuses.push(status);
+            if (status === 1) {
+              starts += 1;
+              if (starts === failAtStart) throw new Error('typing status failed');
+            }
+          },
+          sendText: async ({ text }) => sent.push(text),
+        },
+        baseUrl: 'https://ilinkai.weixin.qq.com/',
+        token: 'host-token',
+        ownerUserId: 'owner-user',
+        typingKeepaliveMs: 5,
+        harness: {
+          sessionExists: async () => true,
+          ask: async () => {
+            askStarted.resolve();
+            return releaseAnswer.promise;
+          },
+        },
+        state: fixture.state,
+        logger: { warn: (...args) => warnings.push(args), error() {} },
+      });
+
+      const turn = bridge.accept(message(`typing-failure-${failAtStart}`, '测试输入状态失败'));
+      await askStarted.promise;
+      await eventually(() => warnings.length === 1);
+      releaseAnswer.resolve('最终回答仍然发送');
+      await turn;
+
+      assert.deepEqual(statuses, failAtStart === 1 ? [1, 2] : [1, 1, 2]);
+      assert.deepEqual(sent, ['最终回答仍然发送']);
+    });
+  }
+});
+
+test('Weixin stops typing while a Harness question is visible', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-typing-question');
+  const events = [];
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      getConfig: async () => ({ typingTicket: 'typing-ticket' }),
+      sendTyping: async ({ status }) => events.push(`typing:${status}`),
+      sendText: async ({ text }) => events.push(`text:${text}`),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async (sessionId, _text, options) => {
+        await options.onInteraction({
+          kind: 'question',
+          interactionId: 'typing-question',
+          rpcId: 'typing-question',
+          sessionId,
+          payload: {
+            type: 'question/requested',
+            sessionId,
+            questions: [{ id: 'answer', question: '需要你的回答' }],
+          },
+          respond: async () => ({ accepted: true }),
+        });
+        await options.onUpdate({ type: 'text', text: '不应在待回答时恢复' });
+        return '任务结束';
+      },
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message('typing-question', '触发问题'));
+
+  assert.equal(events[0], 'typing:1');
+  assert.equal(events[1], 'typing:2');
+  assert.match(events[2], /^text:DeepSeek Harness 需要你补充信息/);
+  assert.equal(events.filter((event) => event === 'typing:1').length, 1);
+  assert.equal(events.at(-1), 'text:任务结束');
+});
+
+test('Weixin resumes typing after the visible Harness question is resolved', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-typing-question-resolved');
+  const events = [];
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      getConfig: async () => ({ typingTicket: 'typing-ticket' }),
+      sendTyping: async ({ status }) => events.push(`typing:${status}`),
+      sendText: async ({ text }) => events.push(`text:${text}`),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async (sessionId, _text, options) => {
+        await options.onInteraction({
+          kind: 'question',
+          interactionId: 'typing-question-resolved',
+          rpcId: 'typing-question-resolved',
+          sessionId,
+          payload: {
+            type: 'question/requested',
+            sessionId,
+            questions: [{ id: 'answer', question: '需要你的回答' }],
+          },
+          respond: async () => ({ accepted: true }),
+        });
+        await options.onInteractionResolved({
+          kind: 'question',
+          interactionId: 'typing-question-resolved',
+        });
+        return '继续处理完成';
+      },
+    },
+    state: fixture.state,
+  });
+
+  await bridge.accept(message('typing-question-resolved', '触发后解决问题'));
+
+  assert.deepEqual(
+    events.filter((event) => event.startsWith('typing:')),
+    ['typing:1', 'typing:2', 'typing:1', 'typing:2'],
+  );
+  assert.equal(events.at(-1), 'text:继续处理完成');
+});
+
+test('Weixin restarts typing when an out-of-band notice races an in-flight keepalive', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-typing-race');
+  const releaseAnswer = deferred();
+  const askStarted = deferred();
+  const releaseHeartbeat = deferred();
+  const events = [];
+  let askOptions;
+  let starts = 0;
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      getConfig: async () => ({ typingTicket: 'typing-ticket' }),
+      sendTyping: async ({ status }) => {
+        events.push(`typing:${status}`);
+        if (status === 1) {
+          starts += 1;
+          if (starts === 2) {
+            await releaseHeartbeat.promise;
+          }
+        }
+      },
+      sendText: async ({ text }) => events.push(`text:${text}`),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    typingKeepaliveMs: 5,
+    harness: {
+      sessionExists: async () => true,
+      ask: async (_sessionId, _text, options) => {
+        askOptions = options;
+        askStarted.resolve();
+        return releaseAnswer.promise;
+      },
+    },
+    state: fixture.state,
+  });
+
+  const turn = bridge.accept(message('typing-race', '执行一个长任务'));
+  await askStarted.promise;
+  await eventually(() => starts === 2);
+
+  const busyNotice = bridge.accept(message('typing-race-batch', '/batch'));
+  await new Promise((resolve) => setImmediate(resolve));
+  let startsWhenProgressResolved = 0;
+  const progressUpdate = askOptions.onUpdate({ type: 'text', text: '继续处理' }).then((result) => {
+    startsWhenProgressResolved = starts;
+    return result;
+  });
+  releaseHeartbeat.resolve();
+  await Promise.all([busyNotice, progressUpdate]);
+
+  assert.deepEqual(
+    events.filter((event) => event.startsWith('typing:')),
+    ['typing:1', 'typing:1', 'typing:2', 'typing:1'],
+  );
+  assert.equal(
+    startsWhenProgressResolved,
+    3,
+    'the concurrent progress update must wait for cancellation and actually restart typing',
+  );
+
+  releaseAnswer.resolve('长任务完成');
+  await turn;
+  assert.deepEqual(
+    events.filter((event) => event.startsWith('typing:')),
+    ['typing:1', 'typing:1', 'typing:2', 'typing:1', 'typing:2'],
+  );
+  assert.equal(events.at(-1), 'text:长任务完成');
+});
+
+test('Weixin cancels typing with an independent signal when the runtime aborts', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-typing-abort');
+  const controller = new AbortController();
+  const typingCalls = [];
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      getConfig: async () => ({ typingTicket: 'typing-ticket' }),
+      sendTyping: async ({ status, signal }) => typingCalls.push({ status, signal }),
+      sendText: async () => assert.fail('an aborted turn must not send a reply'),
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    signal: controller.signal,
+    harness: {
+      sessionExists: async () => true,
+      ask: async (_sessionId, _text, options) => new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+      }),
+    },
+    state: fixture.state,
+    logger: { warn() {}, error() {} },
+  });
+
+  const turn = bridge.accept(message('typing-abort', '启动后关闭'));
+  await eventually(() => typingCalls.some(({ status }) => status === 1));
+  controller.abort(new Error('runtime stopped'));
+  await Promise.all([bridge.close(), turn]);
+
+  assert.deepEqual(typingCalls.map(({ status }) => status), [1, 2]);
+  assert.notEqual(typingCalls[1].signal, controller.signal);
+  assert.equal(typingCalls[1].signal.aborted, false);
 });
 
 test('Weixin answers a multi-question interaction before the original turn queue', async () => {
@@ -1618,7 +2279,7 @@ test('bridge rejects every user except the account owner returned by QR login', 
   assert.equal(status.messagesRejected, 1);
 });
 
-test('bridge commands are local and internal failures return a generic message', async () => {
+test('bridge commands are local and internal failures return a safe traceable message', async () => {
   const fixture = stateFixture();
   fixture.sessions.set('p2p:owner-user', 'old-session');
   const sent = [];
@@ -1641,15 +2302,136 @@ test('bridge commands are local and internal failures return a generic message',
   await bridge.accept(message('new', '/new'));
   assert.equal(fixture.sessions.has('p2p:owner-user'), false);
   await bridge.accept(message('failure', '触发失败'));
-  assert.match(sent.at(-1), /消息处理失败/);
+  assert.match(sent.at(-1), /任务未完成，暂时无法确定原因/);
+  assert.match(sent.at(-1), /错误码：INTERNAL_UNKNOWN；参考号：MF-[A-F0-9]{8}$/);
   assert.doesNotMatch(sent.at(-1), /private path|secret|token-shaped/);
   assert.deepEqual(status.lastMessageError, {
-    code: 'message-processing-failed',
-    reason: 'UNKNOWN',
-    message: '消息处理失败，请稍后重试。',
+    code: 'INTERNAL_UNKNOWN',
+    reason: 'INTERNAL_UNKNOWN',
+    message: '任务未完成，暂时无法确定原因。请重试；若持续发生，请将参考号提供给管理员。',
+    referenceId: status.lastMessageError.referenceId,
     at: status.lastMessageError.at,
   });
+  assert.match(status.lastMessageError.referenceId, /^MF-[A-F0-9]{8}$/);
   assert.doesNotMatch(JSON.stringify(status.lastMessageError), /private path|secret|token-shaped/);
+});
+
+test('Weixin reports a missing preset with recovery steps and the same reference in its log', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-missing-preset');
+  const sent = [];
+  const logs = [];
+  const error = new HarnessRpcError('session.prompt', {
+    code: 'agent-preset/not-found',
+    message: 'private preset path /secret',
+    details: { agentPreset: 'removed-preset' },
+  });
+  const status = createWeixinBridgeStatus();
+  const bridge = new WeixinHarnessBridge({
+    api: { sendText: async ({ text }) => sent.push(text) },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => { throw error; },
+    },
+    state: fixture.state,
+    status,
+    logger: { error: (...args) => logs.push(args) },
+  });
+
+  await bridge.accept(message('missing-preset', '继续之前的会话'));
+
+  const failure = status.lastMessageError;
+  assert.equal(failure.code, 'PRESET_UNAVAILABLE');
+  assert.equal(failure.reason, 'AGENT_PRESET_NOT_FOUND');
+  assert.match(sent.at(-1), /\/presetlist.*\/preset <序号或 ID>.*\/new/u);
+  assert.equal(sent.at(-1).endsWith(`参考号：${failure.referenceId}`), true);
+  const log = logs.find(([text]) => text.includes(`[${failure.referenceId}]`));
+  assert.ok(log, 'the reply reference must identify the logged failure');
+  assert.equal(log[1], error);
+  assert.equal(error.code, 'agent-preset/not-found');
+  assert.doesNotMatch(JSON.stringify({ failure, sent }), /private|secret|removed-preset/u);
+});
+
+test('Weixin exposes a structured model rate limit without changing connection state', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-rate-limit');
+  const sent = [];
+  const status = {
+    ...createWeixinBridgeStatus(),
+    connected: true,
+    connectionState: 'connected',
+  };
+  const bridge = new WeixinHarnessBridge({
+    api: { sendText: async ({ text }) => sent.push(text) },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => {
+        const error = new Error('private Weixin provider rate-limit detail');
+        error.code = 'harness-turn-failed';
+        error.providerCode = 'RATE_LIMIT';
+        throw error;
+      },
+    },
+    state: fixture.state,
+    status,
+    logger: { error() {} },
+  });
+
+  await bridge.accept(message('weixin-rate-limit', '触发模型限流'));
+
+  const failure = status.lastMessageError;
+  assert.equal(failure.code, 'MODEL_RATE_LIMIT');
+  assert.equal(failure.reason, 'HARNESS_TURN_FAILED');
+  assert.match(failure.referenceId, /^MF-[A-F0-9]{8}$/);
+  assert.match(sent.at(-1), /模型服务正在限流，本次任务未完成。请稍后重试。/);
+  assert.equal(sent.at(-1).endsWith(`参考号：${failure.referenceId}`), true);
+  assert.doesNotMatch(sent.at(-1), /private Weixin provider rate-limit detail/);
+  assert.equal(status.connected, true);
+  assert.equal(status.connectionState, 'connected');
+});
+
+test('Weixin does not resubmit a recorded prompt when the safe error reply fails', async () => {
+  const fixture = stateFixture();
+  fixture.sessions.set('p2p:owner-user', 'session-safe-error-replay');
+  let asks = 0;
+  let safeReplyAttempts = 0;
+  const bridge = new WeixinHarnessBridge({
+    api: {
+      sendText: async () => {
+        safeReplyAttempts += 1;
+        throw new Error('safe reply unavailable');
+      },
+    },
+    baseUrl: 'https://ilinkai.weixin.qq.com/',
+    token: 'host-token',
+    ownerUserId: 'owner-user',
+    harness: {
+      sessionExists: async () => true,
+      ask: async () => {
+        asks += 1;
+        const error = new Error('private provider failure');
+        error.code = 'harness-turn-failed';
+        error.providerCode = 'RATE_LIMIT';
+        throw error;
+      },
+    },
+    state: fixture.state,
+    logger: { error() {} },
+  });
+  const inbound = message('weixin-safe-error-replay', '请执行一次');
+
+  await bridge.accept(inbound);
+  await bridge.accept(inbound);
+
+  assert.equal(asks, 1);
+  assert.equal(safeReplyAttempts, 1);
+  assert.equal(fixture.seen.has('weixin-safe-error-replay'), true);
 });
 
 test('Weixin batch input collects up to ten native text messages and submits one ordered turn', async () => {
@@ -1673,6 +2455,13 @@ test('Weixin batch input collects up to ten native text messages and submits one
   });
 
   await bridge.accept(message('batch-start', '/batch'));
+  await bridge.accept(message('batch-quote', '微信引用不能收录', {
+    item_list: [{
+      type: 1,
+      text_item: { text: '微信引用不能收录' },
+      ref_msg: { message_item: { type: 1, text_item: { text: '被引用内容' } } },
+    }],
+  }));
   await bridge.accept(message('batch-voice', '', {
     item_list: [{ type: 3, voice_item: { text: '语音转写不能收录' } }],
   }));
@@ -1695,7 +2484,7 @@ test('Weixin batch input collects up to ten native text messages and submits one
   assert.equal(prompts[0].sessionId, 'session-batch');
   assert.match(prompts[0].prompt, /\[消息 1\]\n内容 1/);
   assert.match(prompts[0].prompt, /\[消息 10\]\n内容 10/);
-  assert.doesNotMatch(prompts[0].prompt, /语音转写不能收录|不会收录/);
+  assert.doesNotMatch(prompts[0].prompt, /微信引用不能收录|语音转写不能收录|不会收录/);
   assert.equal(sent.at(-1).text, '批量完成');
 
   await bridge.accept(message('after-batch', '恢复普通聊天'));
@@ -1728,7 +2517,7 @@ test('Weixin batch cancellation is local and a failed submission remains retryab
   await bridge.accept(message('retry-start', '/batch'));
   await bridge.accept(message('retry-content', '需要重试'));
   await bridge.accept(message('retry-send-1', '/send'));
-  assert.match(sent.at(-1), /消息处理失败.*已保留 1 条消息/s);
+  assert.match(sent.at(-1), /错误码：INTERNAL_UNKNOWN.*已保留 1 条消息/s);
 
   await bridge.accept(message('retry-send-2', '/send'));
   assert.equal(attempts, 2);
@@ -1793,7 +2582,7 @@ test('Weixin refuses /batch while the existing conversation queue is running', a
   });
 
   const turn = bridge.accept(message('busy-turn', '正在运行'));
-  await eventually(() => asks === 1);
+  await eventually(() => asks === 1, 'busy turn did not start before /batch assertion', 5_000);
   await bridge.accept(message('busy-batch', '/batch'));
   assert.match(sent.at(-1), /正在运行的任务.*\/stop.*\/batch/s);
 

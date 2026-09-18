@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { connectionTestMessage } from '../shared/connection-test.mjs';
 import { t } from '../shared/i18n.mjs';
+import { publicMessageFailure } from '../shared/message-failure.mjs';
 import {
   deriveWhatsappBotId,
   maskWhatsappAccount,
@@ -223,6 +224,20 @@ export class WhatsappController {
     });
   }
 
+  async sendProactiveText(botId, target, text, options = {}) {
+    const config = this.#configStore.get(botId);
+    if (!config) throw new Error('Unknown WhatsApp bot');
+    return this.#withBotTransition(botId, async () => {
+      const runtime = this.#runtimes.get(botId);
+      if (!runtime?.status?.ready || typeof runtime.sendProactiveText !== 'function') {
+        const error = new Error(t('WhatsApp机器人尚未连接'));
+        error.code = 'bot-not-connected';
+        throw error;
+      }
+      return runtime.sendProactiveText(target, text, options);
+    });
+  }
+
   async setAccessPolicy(botId, value) {
     if (this.#closed) throw new Error('WhatsApp controller is closed');
     const accessPolicy = normalizeWhatsappAccessPolicy(value);
@@ -285,6 +300,7 @@ export class WhatsappController {
           messagesReceived: runtimeStatus?.messagesReceived ?? 0,
           messagesReplied: runtimeStatus?.messagesReplied ?? 0,
         },
+        lastMessageError: publicMessageFailure(runtimeStatus?.lastMessageError),
         accessPolicy: normalizeWhatsappAccessPolicy(config),
         error: structuredClone(this.#errors.get(config.botId) ?? null),
       };

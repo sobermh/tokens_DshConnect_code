@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { callManagementRpc, registerManagementRpc } from '../plugin-src/management-rpc.mjs';
+import { installInboundTtlRpc } from '../plugin-src/host/inbound-ttl-rpc.mjs';
 
 function fixture(handler, options) {
   let route;
@@ -131,4 +132,20 @@ test('unexpected handler exceptions do not expose secrets', async () => {
   const response = await route.fetch(request());
   assert.equal(response.status, 500);
   assert.doesNotMatch(await response.text(), /private-secret/);
+});
+
+test('inbound TTL remains loopback-only with default and explicit trusted-host policies', async () => {
+  for (const config of [{}, { rpcAuthority: 'trusted-host' }]) {
+    let route;
+    installInboundTtlRpc({ connection: { fetch: { register(value) { route = value; return () => {}; } } } }, {
+      config,
+      runtime: {
+        store: { getTtlHours() { return 24; }, async setTtlHours() {} },
+        service: { async sweepNow() {} },
+      },
+    });
+    assert.equal((await route.fetch(request({ headers: {
+      host: '192.168.1.100:3080', origin: 'http://192.168.1.100:3080',
+    } }))).status, 403);
+  }
 });

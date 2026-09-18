@@ -1,5 +1,11 @@
 # Third-party notices
 
+The IM implementation is synchronized from [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im)
+v4.21.2, commit `34a370bfef1fcf577327b822d2091d2157ded0f8`, under the MIT License.
+Retained fork differences and verification are documented in `docs/im-upstream-sync.md`.
+The Host additionally bundles `semver` 7.8.5 (ISC) and depends on `undici` 7.29.0
+(MIT). The semver license is reproduced below; undici retains its own license.
+
 The personal Feishu connection flow, Lark CLI provisioning, identity metadata,
 and Feishu document/message tools are adapted from
 [`@tokens/dsh-feishu-connect`](https://github.com/sobermh/tokens_DshFeishuConnect_code)
@@ -24,6 +30,24 @@ The WhatsApp channel uses Baileys to implement WhatsApp Web linked-device QR log
 This project is an independent DeepSeek Harness integration. It does not bundle OpenClaw and is not endorsed by Tencent, WeCom, Feishu, DingTalk, QQ, Telegram, Discord, Meta, or WhatsApp.
 
 The WeChat, QQ, Telegram, Discord, and WhatsApp marks use path data published by Simple Icons under the CC0 1.0 Universal license. The Feishu, DingTalk, and WeCom marks are inline vectors used for channel identification. Product names and logos remain trademarks of their respective owners.
+
+## semver license
+
+The ISC License
+
+Copyright (c) Isaac Z. Schlueter and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR
+IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ## Lark Node SDK license
 

@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { createBotWorkspaceScope } from '../../../src/channels/shared/bot-workspace-store.mjs';
-import { HarnessClient } from '../../../src/channels/shared/harness-client.mjs';
+import {
+  HarnessClient,
+  HarnessTurnError,
+  consumeDshImInputOrigin,
+} from '../../../src/channels/shared/harness-client.mjs';
 import {
   OUTBOUND_ARTIFACT_TOOL,
   createOutboundArtifactTool,
@@ -313,6 +317,78 @@ function controlledTurn({ sessionId, initialEnd = false, controlExecutor } = {})
   };
 }
 
+test('HarnessClient preserves structured turn failures for channel classification', async () => {
+  for (const [reason, expectedCode, expectedProviderCode] of [
+    [{ kind: 'error', error: { code: 'RATE_LIMIT', message: 'private provider detail' } },
+      'harness-turn-failed', 'RATE_LIMIT'],
+    [{ kind: 'max-tokens' }, 'model-max-tokens', undefined],
+    [{ kind: 'completed' }, 'model-empty-response', undefined],
+    ['completed', 'model-empty-response', undefined],
+    ['stopped', 'turn-interrupted', undefined],
+  ]) {
+    const turn = controlledTurn();
+    const asking = turn.client.ask(turn.id, 'work', { timeoutMs: 2_000 });
+    await turn.admitted;
+    turn.finish({ reason });
+    await assert.rejects(asking, (error) => {
+      assert.ok(error instanceof HarnessTurnError);
+      assert.equal(error.code, expectedCode);
+      assert.equal(error.providerCode, expectedProviderCode);
+      assert.equal(error.promptAccepted, true);
+      assert.doesNotMatch(error.message, /private provider detail/);
+      return true;
+    });
+  }
+});
+
+test('HarnessClient does not treat partial text from a failed turn as success', async () => {
+  for (const [reason, expectedCode, expectedProviderCode] of [
+    [{ kind: 'error', error: { code: 'RATE_LIMIT' } },
+      'harness-turn-failed', 'RATE_LIMIT'],
+    [{ kind: 'error', error: { code: 'CONTENT_FILTER' } },
+      'harness-turn-failed', 'CONTENT_FILTER'],
+    [{ kind: 'max-tokens' }, 'model-max-tokens', undefined],
+    [{ kind: 'blocked' }, 'turn-blocked', undefined],
+    ['interrupted', 'turn-interrupted', undefined],
+    ['stopped', 'turn-interrupted', undefined],
+    ['cancelled', 'turn-interrupted', undefined],
+    ['aborted', 'turn-aborted', undefined],
+  ]) {
+    const turn = controlledTurn();
+    const asking = turn.client.ask(turn.id, 'work', { timeoutMs: 2_000 });
+    await turn.admitted;
+    turn.finish({ text: 'partial result must not escape', reason });
+    await assert.rejects(asking, (error) => {
+      assert.ok(error instanceof HarnessTurnError);
+      assert.equal(error.code, expectedCode);
+      assert.equal(error.providerCode, expectedProviderCode);
+      return true;
+    });
+  }
+});
+
+test('HarnessClient accepts partial text only for completed or omitted end reasons', async () => {
+  for (const reason of ['completed', { kind: 'completed' }, null]) {
+    const turn = controlledTurn();
+    const asking = turn.client.ask(turn.id, 'work', { timeoutMs: 2_000 });
+    await turn.admitted;
+    turn.finish({ text: 'valid partial result', reason });
+    assert.equal(await asking, 'valid partial result');
+  }
+});
+
+test('HarnessClient marks a reply timeout after prompt admission', async () => {
+  const turn = controlledTurn();
+  const asking = turn.client.ask(turn.id, 'work', { timeoutMs: 1 });
+  await turn.admitted;
+  await assert.rejects(asking, (error) => {
+    assert.ok(error instanceof HarnessTurnError);
+    assert.equal(error.code, 'harness-reply-timeout');
+    assert.equal(error.promptAccepted, true);
+    return true;
+  });
+});
+
 test('control methods require exact owner identity, key, and Session before any RPC', async () => {
   const turn = controlledTurn();
   const owner = {};
@@ -491,6 +567,11 @@ test('in-process control executor receives exact ownership and suppresses contro
   const control = { owner: {}, key: 'direct:executor' };
   const asking = turn.client.ask(turn.id, 'work', { control, timeoutMs: 2_000 });
   await turn.admitted;
+  assert.equal(
+    consumeDshImInputOrigin('http://127.0.0.1:3982', turn.promptRpcId()),
+    true,
+    'the IM queue prompt must be registered before its user event',
+  );
 
   assert.equal(await turn.client.steerActiveTurn(turn.id, 'stay in this turn', control), true);
   assert.equal(await turn.client.stopActiveTurn(turn.id, control), true);
@@ -501,6 +582,13 @@ test('in-process control executor receives exact ownership and suppresses contro
     { sessionId: turn.id, expectedTurn: 7, action: 'stop', text: undefined },
   ]);
   assert.ok(executions.every(({ promptRpcId }) => typeof promptRpcId === 'string' && promptRpcId));
+  assert.equal(typeof executions[0].inputRpcId, 'string');
+  assert.equal(
+    consumeDshImInputOrigin('http://127.0.0.1:3982', executions[0].inputRpcId),
+    true,
+    'the IM steer id must be registered before the in-process injection',
+  );
+  assert.equal(executions[1].inputRpcId, undefined);
   assert.equal(turn.calls.some(({ method, payload }) => (
     method === 'session.cancel' || (method === 'session.prompt' && payload.mode === 'steer')
   )), false);
@@ -543,6 +631,12 @@ test('steer uses mode steer only while the exact owned turn is still active', as
     content: [{ type: 'text', text: 'first line\nsecond line' }],
     clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   });
+  assert.equal(typeof steer.options.rpcId, 'string');
+  assert.equal(
+    consumeDshImInputOrigin('http://127.0.0.1:3982', steer.options.rpcId),
+    true,
+    'the fallback steer RPC must carry its registered IM input id',
+  );
 
   turn.finish({ text: 'done', reason: 'completed' });
   assert.equal(await asking, 'done');

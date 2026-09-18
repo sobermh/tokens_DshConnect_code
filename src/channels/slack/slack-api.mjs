@@ -246,6 +246,24 @@ export class SlackApi {
     return value.file;
   }
 
+  async getMessage({ channelId, messageTs, signal } = {}) {
+    const timestamp = requiredString(messageTs, 'message timestamp');
+    const value = await this.#request('conversations.history', {
+      tokenKind: 'bot',
+      signal,
+      body: {
+        channel: slackId(channelId, 'channel id'),
+        oldest: timestamp,
+        latest: timestamp,
+        inclusive: true,
+        limit: 1,
+      },
+    });
+    return Array.isArray(value?.messages)
+      ? value.messages.find((message) => String(message?.ts ?? '') === timestamp) ?? null
+      : null;
+  }
+
   postMessage({ channelId, text, threadTs, signal }) {
     return this.#request('chat.postMessage', {
       tokenKind: 'bot',
@@ -272,6 +290,34 @@ export class SlackApi {
         text: safeOutgoingText(text),
         parse: 'none',
         link_names: false,
+      },
+    });
+  }
+
+  addReaction({ channelId, messageTs, emojiName, signal, timeoutMs }) {
+    return this.#request('reactions.add', {
+      tokenKind: 'bot',
+      signal,
+      timeoutMs,
+      retry: false,
+      body: {
+        channel: slackId(channelId, 'channel id'),
+        timestamp: requiredString(messageTs, 'message timestamp'),
+        name: requiredString(emojiName, 'reaction name'),
+      },
+    });
+  }
+
+  removeReaction({ channelId, messageTs, emojiName, signal, timeoutMs }) {
+    return this.#request('reactions.remove', {
+      tokenKind: 'bot',
+      signal,
+      timeoutMs,
+      retry: false,
+      body: {
+        channel: slackId(channelId, 'channel id'),
+        timestamp: requiredString(messageTs, 'message timestamp'),
+        name: requiredString(emojiName, 'reaction name'),
       },
     });
   }
@@ -466,7 +512,7 @@ export class SlackApi {
           'content-type': body === undefined || formEncoded
             ? 'application/x-www-form-urlencoded;charset=utf-8'
             : 'application/json;charset=utf-8',
-          'user-agent': 'DeepSeek-Harness-dsh-im (https://github.com/sobermh/tokens_DshConnect_code, 2.3.0)',
+          'user-agent': 'DeepSeek-Harness-dsh-im (https://github.com/xmanrui/dsh-im, 0.2.2)',
         },
         ...(body === undefined ? {} : {
           body: formEncoded ? new URLSearchParams(body).toString() : JSON.stringify(body),

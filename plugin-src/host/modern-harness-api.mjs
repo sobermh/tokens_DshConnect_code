@@ -52,6 +52,15 @@ function questionError(message, code) {
   return error;
 }
 
+function sessionEvents(session) {
+  if (typeof session?.snapshotEvents === 'function') {
+    const events = session.snapshotEvents();
+    if (Array.isArray(events)) return events;
+  }
+  const events = session?.events;
+  return Array.isArray(events) ? events : null;
+}
+
 function matchesQuestions(value, pending) {
   if (!value || typeof value !== 'object'
     || value.sessionId !== pending.sessionId
@@ -191,6 +200,7 @@ class ModernHarnessApi {
   #pendingQuestions = new Map();
   #pendingApprovals = new Map();
   #sessionCursors = new Map();
+  #assistantStreams = new Map();
   #disposers = [];
   #disposed = false;
 
@@ -221,6 +231,9 @@ class ModernHarnessApi {
         { request: { requestId: request.rpcId, ...request.payload } },
         signal,
       )),
+      rename: (request, signal) => rpcResult(request, () => this.#invoke(
+        'session', 'rename', { request: request.payload }, signal,
+      )),
       cancel: (request, signal) => rpcResult(request, () => this.#invoke(
         'session', 'cancel', { request: { sessionId: request.payload.sessionId } }, signal,
       )),
@@ -248,6 +261,13 @@ class ModernHarnessApi {
         if (typeof sessionId !== 'string' || !event || typeof event !== 'object') return;
         if (Number.isSafeInteger(event.seq)) this.#rememberCursor(sessionId, event.seq);
         this.#broadcast({ type: 'session/event', sessionId, event });
+      }, { global: true }));
+      this.#disposers.push(ctx.on('agent/assistant-stream', ({ agent, frame }) => {
+        this.#acceptAssistantStream(agent, frame);
+      }, { global: true }));
+      this.#disposers.push(ctx.on('agent/disposed', ({ agent }) => {
+        const sessionId = agent?.session?.id;
+        if (typeof sessionId === 'string') this.#assistantStreams.delete(sessionId);
       }, { global: true }));
       this.#disposers.push(ctx.on(
         'approval/request',
@@ -316,7 +336,7 @@ class ModernHarnessApi {
       cursor = this.#sessionCursors.get(sessionId) ?? snapshot.cursor;
       if (beforeSeq === undefined && cursor === snapshot.cursor) {
         return {
-          events: historyEntries(snapshot.records),
+          events: this.#withAssistantStream(sessionId, historyEntries(snapshot.records)),
           hasMore: snapshot.hasMore === true,
           ...(snapshot.projections === undefined ? {} : { projections: snapshot.projections }),
         };
@@ -330,7 +350,54 @@ class ModernHarnessApi {
         ...(beforeSeq === undefined ? {} : { beforeSeq }),
       },
     }, signal);
-    return { events: historyEntries(page.records), hasMore: page.hasMore === true };
+    return {
+      events: beforeSeq === undefined
+        ? this.#withAssistantStream(sessionId, historyEntries(page.records))
+        : historyEntries(page.records),
+      hasMore: page.hasMore === true,
+    };
+  }
+
+  #acceptAssistantStream(agent, frame) {
+    const sessionId = agent?.session?.id;
+    if (typeof sessionId !== 'string' || !frame || typeof frame !== 'object') return;
+    if (frame.type === 'start') {
+      const nextSeq = agent?.session?.seq;
+      const startedAfterSeq = Number.isSafeInteger(nextSeq) && nextSeq >= 0
+        ? nextSeq - 1
+        : this.#sessionCursors.get(sessionId) ?? -1;
+      this.#assistantStreams.set(sessionId, {
+        attemptId: frame.attemptId,
+        turn: frame.turn,
+        step: frame.step,
+        startedAfterSeq,
+        entries: [],
+      });
+      return;
+    }
+    const stream = this.#assistantStreams.get(sessionId);
+    if (!stream || stream.attemptId !== frame.attemptId) return;
+    if (frame.type === 'end') {
+      this.#assistantStreams.delete(sessionId);
+      return;
+    }
+    if (frame.type !== 'chunk' || frame.index !== stream.entries.length) return;
+    stream.entries.push({
+      type: 'transient',
+      event: {
+        type: 'assistant/chunk',
+        // Match DSH's Web client ordering: live chunks sit in the numeric gap
+        // before the durable assistant/message that replaces them.
+        seq: stream.startedAfterSeq + 1 - 1 / (frame.index + 2),
+        time: frame.time,
+        data: { turn: stream.turn, step: stream.step, chunk: frame.chunk },
+      },
+    });
+  }
+
+  #withAssistantStream(sessionId, entries) {
+    const transient = this.#assistantStreams.get(sessionId)?.entries ?? [];
+    return transient.length === 0 ? entries : [...entries, ...transient];
   }
 
   #rememberCursor(sessionId, cursor) {
@@ -382,13 +449,10 @@ class ModernHarnessApi {
   }
 
   #claimableAgent(agent) {
-    const sessionId = agent?.session?.id ?? agent?.id;
     const session = agent?.session;
-    const events = typeof session?.snapshotEvents === 'function'
-      ? session.snapshotEvents() : session?.events;
-    if (typeof sessionId !== 'string' || !Array.isArray(events)) {
-      return null;
-    }
+    const sessionId = session?.id ?? agent?.id;
+    const events = sessionEvents(session);
+    if (typeof sessionId !== 'string' || !events) return null;
     return hasActiveHarnessInteractionOwner(
       this.#scope,
       sessionId,
@@ -410,13 +474,97 @@ class ModernHarnessApi {
   #requestQuestion(request, next) {
     const owner = this.#claimableAgent(request?.agent);
     if (!owner) return next();
-    if (request.signal?.aborted) {
+    const turnSignal = request.signal;
+    if (turnSignal?.aborted) {
       return Promise.reject(questionError(
         'ask_user_question was aborted before the user answered', 'ASK_ABORTED',
       ));
     }
-    return new Promise((resolve, reject) => {
-      const pending = {
+    // Give this question a lifetime of its own instead of lending it the enclosing
+    // turn's. `dsh-agent-loop` mints one abort controller per turn and every tool
+    // call in that turn shares the one signal, and under PTC two consumers of it
+    // react to the abort EVENT rather than to `signal.aborted`: `run_code` flips its
+    // own program controller from an abort listener (dsh-tools `onOuterAbort`) and
+    // the worker code runtime retires the worker the same way
+    // (dsh-code-runtime-worker-thread `onAbort`). Retiring the Web card by firing
+    // that event therefore also killed the program that was merely waiting for this
+    // answer — `code run failed (abort)`. A private controller keeps the retirement
+    // below local: real upstream cancellation is forwarded into it, and every
+    // listener on this waterfall — the Remote/Web forwarder that renders the card,
+    // and our own IM pending — sees a lifetime that ends with this question rather
+    // than with the turn.
+    //
+    // Handing it downstream means replacing `request.signal`, because the Cordis
+    // waterfall passes the same request object to every remaining listener and
+    // `next()` takes no replacement arguments. The object is a per-call copy made by
+    // `UserQuestionService.ask`, and the signal it carried stays reachable here as
+    // `turnSignal`, so the caller's own view of the request is untouched.
+    const question = new AbortController();
+    const forwardTurnAbort = () => question.abort(turnSignal?.reason);
+    turnSignal?.addEventListener('abort', forwardTurnAbort, { once: true });
+    request.signal = question.signal;
+    // Race the IM answer against the host's own answerers (Web/CLI). Claiming the
+    // request exclusively used to keep the question out of Web entirely, leaving
+    // whoever happened to be looking at that Session with a card they could not
+    // answer. Racing keeps both surfaces usable: the first answer wins.
+    const im = this.#askThroughIm(request, owner);
+    let answeredByIm = false;
+    const native = Promise.resolve()
+      .then(() => next())
+      .catch((error) => {
+        // A pure-IM session has no client connected, so the host rejects with
+        // NO_PROVIDER — an expected state rather than a failure — and ASK_ABORTED
+        // is this adapter's own retire signal below. Any other error is real, so
+        // log it instead of swallowing it silently; the question still stays open
+        // for IM rather than being failed outright.
+        if (error?.code !== 'NO_PROVIDER' && error?.code !== 'ASK_ABORTED') {
+          console.warn(
+            '[dsh-im] the host user-question answerer failed; waiting for the IM answer:',
+            error?.message ?? error,
+          );
+        }
+        return new Promise(() => {});
+      });
+    return Promise.race([
+      native,
+      im.promise.then((value) => {
+        answeredByIm = true;
+        return value;
+      }),
+    ]).finally(() => {
+      // Losing side cleanup. A host answer already settled this request, so drop
+      // the IM pending: leaving it registered would let a late press answer a
+      // question the model has moved past. Settling is idempotent.
+      im.dismiss(new Error('another client answered this question'));
+      turnSignal?.removeEventListener('abort', forwardTurnAbort);
+      if (answeredByIm) {
+        // The host's own answerer (DSH Web) keeps its question card until its own
+        // pending settles, and a host-side adapter has no other handle on it. A Web
+        // client holds that pending through the lifetime this question handed
+        // downstream, so ending that lifetime makes the client drop a card whose
+        // answer was already given on IM — otherwise it keeps offering choices for a
+        // question the model has moved past.
+        //
+        // Ending it is `abort`, not a dispatched `abort` event: a listener that
+        // reads `signal.aborted` must see the same thing one that listens for the
+        // event does. Either way it reaches only this question's controller, so the
+        // turn and every other tool call in it — a waiting `run_code` program above
+        // all — keep running. The reason carries `ASK_ABORTED` so the host answerer
+        // rejecting alongside us stays an expected retirement rather than a logged
+        // failure.
+        question.abort(questionError('the question was answered on IM', 'ASK_ABORTED'));
+      }
+    });
+  }
+
+  /**
+   * Present one question to IM clients. Returns the answer promise plus a
+   * `dismiss` used to retire the pending when the host answers first.
+   */
+  #askThroughIm(request, owner) {
+    let pending = null;
+    const promise = new Promise((resolve, reject) => {
+      pending = {
         rpcId: randomUUID(),
         sessionId: owner.sessionId,
         questions: request.questions,
@@ -441,6 +589,10 @@ class ModernHarnessApi {
       request.signal?.addEventListener('abort', onAbort, { once: true });
       this.#broadcast(this.#questionFrame(pending).payload, pending.rpcId);
     });
+    return {
+      promise,
+      dismiss: (reason) => pending?.settle('cancelled', reason),
+    };
   }
 
   #approvalFrame(pending) {
@@ -547,6 +699,7 @@ class ModernHarnessApi {
     if (this.#disposed) return;
     this.#disposed = true;
     for (const subscription of [...this.#mux]) subscription.close();
+    this.#assistantStreams.clear();
     for (const pending of [...this.#pendingApprovals.values()]) pending.settle('cancelled');
     for (const pending of [...this.#pendingQuestions.values()]) pending.settle(
       'cancelled',

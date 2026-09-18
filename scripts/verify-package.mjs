@@ -118,14 +118,12 @@ if ((client.match(/ctx\.slots\.inject\("settings\.section"/g) ?? []).length !== 
   || client.includes('ctx.slots.inject("settings.plugins.tab"')) {
   throw new Error('client bundle must register exactly one top-level settings section');
 }
-if (/role:\s*["']switch|type:\s*["']checkbox/.test(client)) {
-  throw new Error('client bundle contains a channel enable switch');
-}
+// Upstream access, delivery, and context settings legitimately use checkboxes.
 if (!client.includes('container-type: inline-size')
   || !client.includes('@container (max-width: 680px)')) {
   throw new Error('client bundle does not contain the narrow-panel DingTalk QR layout');
 }
-for (const marker of ['/feishu', '/weixin', '/dingtalk', '/wecom', '/qq', '/slack', '/telegram', '/discord', '/whatsapp']) {
+for (const marker of ['/feishu', '/weixin', '/dingtalk', '/wecom', '/wecom-app', '/office', '/qq', '/slack', '/telegram', '/discord', '/whatsapp']) {
   if (!host.includes(marker)) {
     throw new Error(`host bundle does not contain the internal ${marker} RPC provider`);
   }
@@ -175,6 +173,7 @@ for (const name of ['@xmanrui/dsh-feishu', '@xmanrui/dsh-weixin', '@xmanrui/dsh-
   }
 }
 const directDependencies = {
+  undici: '7.29.0',
   'dingtalk-stream': '2.1.4',
   '@tencent-connect/qqbot-nodejs': '1.0.4',
   '@wecom/aibot-node-sdk': '1.0.7',

@@ -1,7 +1,7 @@
 {
   "name": "@tokensapi/dsh-connect",
   "version": "2.8.0",
-  "description": "统一管理十种 IM 机器人及飞书、钉钉个人账号授权，并接入本机 DeepSeek Harness。",
+  "description": "统一管理 IM 机器人、AI Office 及飞书、钉钉个人账号授权，并接入本机 DeepSeek Harness。",
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -99,6 +99,7 @@
     }
   },
   "scripts": {
+    "audit:im": "node scripts/audit-im-upstream.mjs 34a370bfef1fcf577327b822d2091d2157ded0f8 --check",
     "build": "node plugin-src/client/build.mjs && node plugin-src/host/build.mjs",
     "test": "node --test test/*.test.mjs test/channels/*/*.test.mjs",
     "check": "npm test && npm run build && node scripts/verify-package.mjs",
@@ -112,15 +113,18 @@
     "@tencent-connect/qqbot-nodejs": "1.0.4",
     "@wecom/aibot-node-sdk": "1.0.7",
     "dingtalk-stream": "2.1.4",
-    "qrcode": "1.5.4"
+    "qrcode": "1.5.4",
+    "undici": "7.29.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
     "@larksuiteoapi/node-sdk": "1.73.0",
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "esbuild": "0.25.9",
     "https-proxy-agent": "5.0.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-test-renderer": "18.3.1"
+    "react-test-renderer": "18.3.1",
+    "semver": "7.8.5"
   }
 }

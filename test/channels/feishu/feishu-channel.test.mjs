@@ -4,6 +4,8 @@ import { VerifiedFeishuChannel } from '../../../src/channels/feishu/feishu-chann
 
 function fakeClient(overrides = {}) {
   const calls = {
+    cards: [],
+    messages: [],
     replies: [],
     updates: [],
     settings: [],
@@ -16,7 +18,11 @@ function fakeClient(overrides = {}) {
   const client = {
     cardkit: { v1: {
       card: {
-        create: async () => ({ code: 0, data: { card_id: 'card-test' } }),
+        create: async (request) => {
+          calls.cards.push(request);
+          const cardId = calls.cards.length === 1 ? 'card-test' : `card-test-${calls.cards.length}`;
+          return { code: 0, data: { card_id: cardId } };
+        },
         settings: async (request) => {
           calls.settings.push(request);
           return { code: 0 };
@@ -45,9 +51,14 @@ function fakeClient(overrides = {}) {
       message: {
         reply: async (request) => {
           calls.replies.push(request);
-          return { code: 0, data: { message_id: 'om-stream' } };
+          const messageId = calls.replies.length === 1 ? 'om-stream' : `om-stream-${calls.replies.length}`;
+          return { code: 0, data: { message_id: messageId } };
         },
-        create: async () => ({ code: 0, data: { message_id: 'om-stream' } }),
+        create: async (request) => {
+          calls.messages.push(request);
+          const messageId = calls.messages.length === 1 ? 'om-stream' : `om-stream-${calls.messages.length}`;
+          return { code: 0, data: { message_id: messageId } };
+        },
         delete: async (request) => {
           calls.recalls.push(request);
           return { code: 0 };
@@ -75,6 +86,14 @@ function fakeClient(overrides = {}) {
   return { client, calls };
 }
 
+function finalCardContents(calls) {
+  return calls.cards.map((request, index) => {
+    const cardId = index === 0 ? 'card-test' : `card-test-${index + 1}`;
+    return calls.updates.findLast((update) => update.path.card_id === cardId)?.data.content
+      ?? JSON.parse(request.data.data).body.elements[0].content;
+  });
+}
+
 test('VerifiedFeishuChannel streams content and verifies terminal settings', async () => {
   const { client, calls } = fakeClient();
   const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
@@ -86,7 +105,7 @@ test('VerifiedFeishuChannel streams content and verifies terminal settings', asy
     },
   }, { replyTo: 'om_user' });
 
-  assert.deepEqual(result, { messageId: 'om-stream' });
+  assert.deepEqual(result, { messageId: 'om-stream', providerMessageIds: ['om-stream'] });
   assert.equal(calls.replies[0].path.message_id, 'om_user');
   assert.deepEqual(calls.updates.map((call) => ({
     content: call.data.content,
@@ -103,6 +122,129 @@ test('VerifiedFeishuChannel streams content and verifies terminal settings', asy
     },
   });
   assert.equal(calls.recalls.length, 0);
+});
+
+test('VerifiedFeishuChannel previews long snapshots and delivers the entire final answer in cards', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client });
+  const answer = `${'A'.repeat(28000)}\n\n  ${'中'.repeat(28000)}😀\n尾声  `;
+
+  const result = await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent(answer.slice(0, 28001));
+      const preview = calls.updates.at(-1).data.content;
+      assert.ok(preview.length <= 28000);
+      assert.match(preview, /生成完成后将分段发送完整回答/);
+      const updateCount = calls.updates.length;
+      await controller.setContent(answer);
+      assert.equal(calls.updates.length, updateCount, 'unchanged previews need no provider update');
+      assert.equal(calls.cards.length, 1, 'only the final snapshot is split into permanent cards');
+    },
+  }, { replyTo: 'om_user' });
+
+  const contents = finalCardContents(calls);
+  assert.equal(contents.join(''), answer, 'preserve the latest tail, newlines, and whitespace');
+  assert.ok(contents.every((content) => content.length <= 28000 && content.isWellFormed()));
+  assert.ok(calls.updates.every(({ data }) => data.content.length <= 28000));
+  assert.equal(result.providerMessageIds.length, contents.length);
+  assert.deepEqual(result.providerMessageIds, ['om-stream', 'om-stream-2', 'om-stream-3']);
+  assert.ok(calls.replies.every(({ path }) => path.message_id === 'om_user'));
+  assert.equal(calls.settings.length, contents.length);
+  assert.ok(calls.settings.every(({ data }) => (
+    JSON.parse(data.settings).config.streaming_mode === false
+  )));
+  assert.equal(calls.recalls.length, 0);
+});
+
+test('VerifiedFeishuChannel handles exact limits and Unicode without a reply target', async (t) => {
+  const previewLimit = 28000 - '\n\n内容较长，生成完成后将分段发送完整回答。'.length;
+  for (const answer of [
+    'a'.repeat(27999),
+    'a'.repeat(28000),
+    'a'.repeat(28001),
+    `${'中'.repeat(27999)}😀尾声`,
+    `${'a'.repeat(20000)}\n\n${'b'.repeat(12000)}`,
+    `${'a'.repeat(48)}😀${'b'.repeat(30000)}`,
+    `${'a'.repeat(previewLimit - 1)}😀${'b'.repeat(100)}`,
+  ]) {
+    await t.test(`${answer.length} UTF-16 units`, async () => {
+      const { client, calls } = fakeClient();
+      const channel = new VerifiedFeishuChannel({ client });
+      const result = await channel.stream('oc_chat', {
+        markdown: async (controller) => controller.setContent(answer),
+      });
+
+      const contents = finalCardContents(calls);
+      assert.equal(contents.join(''), answer);
+      assert.ok(contents.every((content) => content.length <= 28000 && content.isWellFormed()));
+      assert.ok(calls.updates.every(({ data }) => (
+        data.content.length <= 28000 && data.content.isWellFormed()
+      )));
+      assert.ok(calls.settings.every(({ data }) => (
+        JSON.parse(data.settings).config.summary.content.isWellFormed()
+      )));
+      assert.equal(contents.length, answer.length <= 28000 ? 1 : 2);
+      assert.equal(result.providerMessageIds.length, contents.length);
+      assert.ok(calls.messages.every(({ params, data }) => (
+        params.receive_id_type === 'chat_id' && data.receive_id === 'oc_chat'
+      )));
+      assert.equal(calls.replies.length, 0);
+      assert.equal(calls.recalls.length, 0);
+    });
+  }
+});
+
+test('VerifiedFeishuChannel replaces oversized progress with a shorter final answer', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client });
+
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('中间过程'.repeat(10000));
+      await controller.setContent('最终回答');
+    },
+  }, { replyTo: 'om_user' });
+
+  assert.deepEqual(finalCardContents(calls), ['最终回答']);
+  assert.equal(calls.replies.length, 1);
+  assert.equal(calls.recalls.length, 0);
+});
+
+test('VerifiedFeishuChannel finishes an empty producer and skips duplicate content updates', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '' });
+
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent(null);
+      await controller.setContent('');
+    },
+  });
+
+  assert.deepEqual(finalCardContents(calls), ['…']);
+  assert.equal(calls.updates.length, 0);
+  assert.equal(calls.settings.length, 1);
+});
+
+test('VerifiedFeishuChannel cleans up every split card on a real provider failure for text fallback', async () => {
+  const { client, calls } = fakeClient({
+    updateContent: async (request) => {
+      calls.updates.push(request);
+      return request.path.card_id === 'card-test-3'
+        ? { code: 230099, msg: 'element update failed' }
+        : { code: 0 };
+    },
+  });
+  const channel = new VerifiedFeishuChannel({ client });
+
+  await assert.rejects(channel.stream('oc_chat', {
+    markdown: async (controller) => controller.setContent('a'.repeat(56001)),
+  }, { replyTo: 'om_user' }), /cardElement\.content failed/);
+
+  assert.equal(calls.settings.length, 2);
+  assert.deepEqual(calls.recalls.map(({ path }) => path.message_id), [
+    'om-stream', 'om-stream-2', 'om-stream-3',
+  ]);
 });
 
 test('VerifiedFeishuChannel rejects failed updates and recalls the partial card', async () => {
@@ -570,4 +712,381 @@ test('VerifiedFeishuChannel recognizes the SDK array-shaped permission error', a
       && error.providerCode === 99991672
       && !error.message.includes('provider permission URL'),
   );
+});
+
+test('rotate() finalizes the old card and carries the final answer into a new card', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  const result = await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('第一步进行中');
+      await controller.rotate();
+      // 此间隙 bridge 发出独立交互消息（此处不需要模拟）
+      await controller.setContent('最终回答');
+    },
+  });
+  assert.deepEqual(result.providerMessageIds, ['om-stream', 'om-stream-2']);
+  const card1 = calls.updates.filter((u) => u.path.card_id === 'card-test');
+  assert.ok(card1.at(-1).data.content.includes('最终结果见下方'), 'old card must carry the pointer notice');
+  const card2 = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.ok(card2.at(-1).data.content.includes('最终回答'), 'new card must carry the final answer');
+  assert.equal(calls.settings.length, 2, 'both cards must be finished');
+});
+
+test('rotate() degrades gracefully when finalizing the old card fails', async () => {
+  let cardTestUpdates = 0;
+  const { client, calls } = fakeClient({
+    updateContent: async (request) => {
+      if (request.path.card_id === 'card-test') {
+        cardTestUpdates += 1;
+        if (cardTestUpdates === 2) throw new Error('transient finalize failure');
+      }
+      calls.updates.push(request);
+      return { code: 0 };
+    },
+  });
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  const result = await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('第一步进行中');
+      await controller.rotate();
+      await controller.setContent('最终回答');
+    },
+  });
+  assert.deepEqual(result.providerMessageIds, ['om-stream', 'om-stream-2']);
+  const card2 = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.ok(card2.at(-1).data.content.includes('最终回答'));
+});
+
+test('rotate() keeps oversized chunked delivery on the rotated card chain', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  const huge = `${'A'.repeat(27990)}\nB`.repeat(2);
+  const result = await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('过程');
+      await controller.rotate();
+      await controller.setContent(huge);
+    },
+  });
+  assert.equal(result.providerMessageIds.length >= 3, true);
+  const settingsByCard = calls.settings.map((s) => s.path.card_id);
+  assert.deepEqual([...new Set(settingsByCard)].length, settingsByCard.length, 'each card finishes exactly once');
+});
+
+test('VerifiedFeishuChannel asks reply_in_thread for a streamed card and reports the created thread', async () => {
+  const { client, calls } = fakeClient({
+    replyMessage: async (request) => {
+      calls.replies.push(request);
+      return {
+        code: 0,
+        data: {
+          message_id: 'om-stream-topic',
+          thread_id: request.data.reply_in_thread === true ? 'omt_stream' : undefined,
+        },
+      };
+    },
+  });
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  const threadIds = [];
+  const result = await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('第一段');
+    },
+  }, {
+    replyTo: 'om_user',
+    replyInThread: true,
+    onReplyThreadId: async (threadId) => threadIds.push(threadId),
+  });
+
+  assert.equal(result.messageId, 'om-stream-topic');
+  assert.equal(calls.replies[0].data.reply_in_thread, true);
+  assert.deepEqual(threadIds, ['omt_stream']);
+});
+
+test('VerifiedFeishuChannel keeps reply_in_thread off by default', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('第一段');
+    },
+  }, { replyTo: 'om_user' });
+  assert.equal(calls.replies[0].data.reply_in_thread, undefined);
+});
+
+test('VerifiedFeishuChannel sends artifacts into a topic via reply_in_thread and reports the thread', async () => {
+  const { client, calls } = fakeClient({
+    replyMessage: async (request) => {
+      calls.replies.push(request);
+      return {
+        code: 0,
+        data: {
+          message_id: 'om-file-topic',
+          thread_id: request.data.reply_in_thread === true ? 'omt_file' : undefined,
+        },
+      };
+    },
+  });
+  const channel = new VerifiedFeishuChannel({ client });
+  const file = {
+    artifactId: 'artifact-topic',
+    deliveryKey: 'delivery-topic',
+    fileName: 'result.txt',
+    mediaType: 'text/plain',
+    size: 3,
+    bytes: Buffer.from('abc'),
+  };
+  const threadIds = [];
+  await channel.sendFile('oc_chat', file, {
+    replyTo: 'om_user',
+    replyInThread: true,
+    onReplyThreadId: async (threadId) => threadIds.push(threadId),
+  });
+  assert.equal(calls.replies[0].data.reply_in_thread, true);
+  assert.equal(calls.replies[0].data.msg_type, 'file');
+  assert.deepEqual(threadIds, ['omt_file']);
+});
+
+test('issue #163: setContent 的在途写不会飞越 rotate() 的定格（定格基于最新快照且定格后零写回）', async () => {
+  let releaseFirstWrite;
+  const gate = new Promise((resolve) => { releaseFirstWrite = resolve; });
+  const { client, calls } = fakeClient({
+    updateContent: async (request) => {
+      calls.updates.push(request);
+      if (calls.updates.length === 1) await gate; // 第一条卡写挂在未决状态
+      return { code: 0 };
+    },
+  });
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      const firstWrite = controller.setContent('第一步进行中'); // 在途
+      const rotation = controller.rotate();                     // 并发换卡
+      releaseFirstWrite();
+      await firstWrite;
+      await rotation;
+    },
+  });
+  const oldCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test');
+  // 修复后 lastContent 在 await 写卡之前推进，定格内容必须基于「第一步进行中」；
+  // 修复前定格读到的是 initialText「正在思考…」。
+  assert.ok(oldCardWrites.at(-1).data.content.startsWith('第一步进行中'),
+    '定格内容必须基于最新快照');
+  assert.ok(oldCardWrites.at(-1).data.content.includes('最终结果见下方'),
+    '旧卡的最后一次写必须是定格内容（定格后零写回）');
+});
+
+test('issue #163: interactionPresented() 之前 setContent 不建新卡，之后才建', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('第一步进行中');
+      await controller.rotate();
+      await controller.setContent('挂起期快照'); // 挂起：不得建卡
+      controller.interactionPresented();          // 模拟 bridge 呈现提问卡后通知
+      await controller.setContent('恢复后的更新');
+    },
+  });
+  assert.equal(calls.cards.length, 2, '挂起期不得建新卡，呈现后只建一张');
+  const newCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.ok(newCardWrites.at(-1).data.content.includes('恢复后的更新'));
+});
+
+test('issue #163: interactionPresented() 幂等且未换卡时调用无害', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      controller.interactionPresented();              // 未换卡
+      await controller.setContent('普通更新');
+      await controller.rotate();
+      controller.interactionPresented();
+      controller.interactionPresented();              // 重复
+      await controller.setContent('最终回答');
+    },
+  });
+  assert.equal(calls.cards.length, 2);
+});
+
+test('issue #163: 呈现后与冻结内容相同的重放快照不写卡，累计快照只写增量', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('过程 A');
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent('过程 A');               // 核心重放提问前快照
+      await controller.setContent('过程 A + 增量 B');       // 累计快照
+    },
+  });
+  const newCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  // 修复后剥前缀得「 + 增量 B」；修复前整卡写入原文。
+  assert.equal(newCardWrites.at(-1).data.content, ' + 增量 B', '新卡内容必须精确等于剥离冻结前缀后的增量');
+});
+
+test('issue #163: 终稿分段只含增量，不再重复提问前过程', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('过程 A');
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent('过程 A\n\n最终回答 B');
+    },
+  });
+  const newCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.ok(newCardWrites.at(-1).data.content.includes('最终回答 B'));
+  assert.ok(!newCardWrites.at(-1).data.content.includes('过程 A'), '终稿不得重放冻结前缀');
+  const oldCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test');
+  assert.ok(oldCardWrites.at(-1).data.content.includes('过程 A'), '提问前过程保留在旧卡');
+});
+
+test('issue #163: 非前缀匹配的工具行原样写入新卡（回归锚）', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('过程 A');
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent('_正在使用 read_file…_');
+    },
+  });
+  const newCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.equal(newCardWrites.at(-1).data.content, '_正在使用 read_file…_');
+});
+
+test('issue #163: 两轮提问链式去重：第二轮冻结基线为第一轮累计快照', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent('过程 A');
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent('过程 A + B1');      // 第一轮增量 B1
+      await controller.rotate();                        // 第二轮提问
+      controller.interactionPresented();
+      await controller.setContent('过程 A + B1 + B2');  // 第二轮增量「 + B2」
+    },
+  });
+  assert.equal(calls.cards.length, 3);
+  const card3Writes = calls.updates.filter((u) => u.path.card_id === 'card-test-3');
+  assert.ok(card3Writes.at(-1).data.content.includes('B2'));
+  assert.ok(!card3Writes.at(-1).data.content.includes('B1'), '第二轮新卡不得重放第一轮增量');
+  // 评审补充：第二张卡定格后只保留它实际展示的增量，不得被完整快照回写。
+  const card2Writes = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.ok(card2Writes.at(-1).data.content.includes('最终结果见下方'), '第二张卡必须定格');
+  assert.ok(!card2Writes.at(-1).data.content.includes('过程 A'), '定格不得把已剥离的前文写回第二张卡');
+  assert.ok(card2Writes.at(-1).data.content.includes('B1'), '定格保留第二张卡的增量');
+});
+
+test('issue #163: 超长快照换卡后，旧卡未展示的尾部进入新卡（不丢失）', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client, initialText: '正在思考…' });
+  const longText = `${'x'.repeat(30_000)}TAIL_MARKER`;
+  await channel.stream('oc_chat', {
+    markdown: async (controller) => {
+      await controller.setContent(longText);
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent(`${longText}\n\n增量 B`);
+    },
+  });
+  const oldCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test');
+  assert.ok(!oldCardWrites.at(-1).data.content.includes('TAIL_MARKER'), '旧卡定格展示的是截断前缀');
+  const newCardWrites = calls.updates.filter((u) => u.path.card_id === 'card-test-2');
+  assert.ok(newCardWrites.at(-1).data.content.includes('TAIL_MARKER'), '旧卡未展示的尾部必须进入新卡');
+  assert.ok(newCardWrites.at(-1).data.content.includes('增量 B'), '增量同样保留');
+});
+
+test('rotation keeps transient tool statuses out of the frozen text prefix', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client });
+  await channel.stream('oc_chat', { markdown: async (controller) => {
+    await controller.setContent('正文 A');
+    await controller.rotate();
+    controller.interactionPresented();
+    await controller.setContent('_正在使用 read_file…_', { transient: true });
+    await controller.rotate();
+    controller.interactionPresented();
+    await controller.setContent('正文 A\n\n正文 B');
+  } });
+  assert.deepEqual(finalCardContents(calls), [
+    '正文 A\n\n⤵️ 最终结果见下方',
+    '_正在使用 read_file…_\n\n⤵️ 最终结果见下方',
+    '\n\n正文 B',
+  ]);
+});
+
+test('a final snapshot with no new text replaces the previous transient status', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client });
+  await channel.stream('oc_chat', { markdown: async (controller) => {
+    await controller.setContent('完整回答 A');
+    await controller.rotate();
+    controller.interactionPresented();
+    await controller.setContent('_正在整理结果…_', { transient: true });
+    const writesBeforeReplay = calls.updates.length;
+    await controller.setContent('完整回答 A');
+    assert.equal(calls.updates.length, writesBeforeReplay, 'replayed snapshots stay silent during generation');
+  } });
+  assert.equal(finalCardContents(calls).at(-1), '完整回答 A');
+  assert.equal(JSON.parse(calls.settings.at(-1).data.settings).config.streaming_mode, false);
+});
+
+test('rotation starts a text prefix after a placeholder or an unrelated text snapshot', async () => {
+  for (const initialSnapshot of [null, '先前独立正文']) {
+    const { client, calls } = fakeClient();
+    const channel = new VerifiedFeishuChannel({ client });
+    await channel.stream('oc_chat', { markdown: async (controller) => {
+      if (initialSnapshot) await controller.setContent(initialSnapshot);
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent('新正文 A');
+      await controller.rotate();
+      controller.interactionPresented();
+      await controller.setContent('新正文 A\n\n后续 B');
+    } });
+    assert.equal(finalCardContents(calls).at(-1), '\n\n后续 B');
+  }
+});
+
+test('rotation freezes only content that reached the card after an update failure', async () => {
+  const { client, calls } = fakeClient({ updateContent: async (request) => {
+    if (request.data.content.includes('尚未送达 B') && !request.data.content.includes('最终 C')) {
+      throw new Error('update failed');
+    }
+    calls.updates.push(request);
+    return { code: 0 };
+  } });
+  const channel = new VerifiedFeishuChannel({ client });
+  await channel.stream('oc_chat', { markdown: async (controller) => {
+    await controller.setContent('正文 A');
+    await assert.rejects(controller.setContent('正文 A\n\n尚未送达 B'), /update failed/);
+    await controller.rotate();
+    controller.interactionPresented();
+    await controller.setContent('正文 A\n\n尚未送达 B\n\n最终 C');
+  } });
+  assert.deepEqual(finalCardContents(calls), [
+    '正文 A\n\n⤵️ 最终结果见下方',
+    '\n\n尚未送达 B\n\n最终 C',
+  ]);
+});
+
+test('recallMessage deletes through the message delete API and swallows failures', async () => {
+  const { client, calls } = fakeClient();
+  const channel = new VerifiedFeishuChannel({ client });
+
+  await channel.recallMessage('om_heartbeat');
+  assert.equal(calls.recalls.length, 1);
+  assert.equal(calls.recalls[0].path.message_id, 'om_heartbeat');
+
+  client.im.v1.message.delete = async () => { throw new Error('already gone'); };
+  await channel.recallMessage('om_gone');
+  assert.equal(calls.recalls.length, 1);
 });

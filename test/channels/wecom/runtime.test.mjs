@@ -42,6 +42,14 @@ test('Enterprise WeChat runtime sends a connection test only to the remembered p
     chatId: 'member-private',
     body: { msgtype: 'markdown', markdown: { content: '测试' } },
   }]);
+  assert.deepEqual(await runtime.sendProactiveText({
+    kind: 'group',
+    route: { chatId: 'group-target' },
+  }, '主动投递'), { sent: true });
+  assert.deepEqual(client.sent[1], {
+    chatId: 'group-target',
+    body: { msgtype: 'markdown', markdown: { content: '主动投递' } },
+  });
   await runtime.stop();
 });
 
@@ -160,7 +168,7 @@ test('Enterprise WeChat runtime aborts an in-flight Harness interaction when sto
 
 test('Enterprise WeChat runtime enables result-file delivery without per-bot configuration', async () => {
   const client = new FakeClient();
-  const finished = deferred();
+  const askObserved = deferred();
   let onArtifact;
   const runtime = new WecomRuntime({
     config: { botId: 'wecom_bot', remoteBotId: 'remote-bot' },
@@ -170,12 +178,13 @@ test('Enterprise WeChat runtime enables result-file delivery without per-bot con
       sessionExists: async () => true,
       ask: async (_sessionId, _text, options) => {
         onArtifact = options.onArtifact;
+        askObserved.resolve();
         return '完成';
       },
     },
     state: {
       hasSeen: () => false,
-      markSeen: async () => finished.resolve(),
+      markSeen: async () => {},
       sessionFor: () => 'session-existing',
       setSession: async () => {},
       clearSession: async () => {},
@@ -195,7 +204,7 @@ test('Enterprise WeChat runtime enables result-file delivery without per-bot con
       text: { content: '生成文件' },
     },
   });
-  await finished.promise;
+  await askObserved.promise;
   assert.equal(typeof onArtifact, 'function');
   await runtime.stop();
 });

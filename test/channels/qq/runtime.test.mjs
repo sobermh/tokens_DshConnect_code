@@ -47,10 +47,12 @@ test('QQ runtime waits for gateway ready, installs typing, and stops its client'
   const status = await runtime.start();
   assert.equal(status.ready, true);
   assert.equal(status.qqConnectionState, 'connected');
-  assert.equal(bot.middlewares[0].name, 'typing-middleware');
-  assert.equal(bot.middlewares[0].options.keepAlive, true);
-  assert.equal(bot.middlewares[0].options.predicate({ message: { senderId: 'owner' } }), true);
-  assert.equal(bot.middlewares[0].options.predicate({ message: { senderId: 'other' } }), false);
+  assert.equal(typeof bot.middlewares[0], 'function'); // contentSanitizer (face-tag parsing)
+  assert.equal(bot.middlewares[1].name, 'typing-middleware');
+  assert.equal(bot.middlewares[1].options.keepAlive, true);
+  assert.equal(bot.middlewares[1].options.predicate({ message: { senderId: 'owner' } }), true);
+  assert.equal(bot.middlewares[1].options.predicate({ message: { senderId: 'other' } }), false);
+  assert.equal(botOptions.markdownSupport, false);
   botOptions.logger.debug('raw gateway payload');
   botOptions.logger.info('gateway ready');
   assert.deepEqual(sdkLogs, [['info', 'gateway ready']]);
@@ -97,6 +99,14 @@ test('QQ runtime sends a proactive connection test to the explicit owner fallbac
     target: { scope: 'c2c', targetId: 'owner-openid' },
     text: 'connection-test',
   }]);
+  await runtime.sendProactiveText({
+    kind: 'group',
+    route: { groupOpenId: 'group-openid' },
+  }, 'proactive-test');
+  assert.deepEqual(bot.sent[1], {
+    target: { scope: 'group', targetId: 'group-openid' },
+    text: 'proactive-test',
+  });
   await runtime.stop();
 });
 
@@ -187,7 +197,7 @@ test('QQ runtime aborts an in-flight Harness interaction when stopped', async ()
 
 test('QQ runtime enables result-file delivery without per-bot configuration', async () => {
   const bot = new FakeBot();
-  const finished = deferred();
+  const askObserved = deferred();
   let onArtifact;
   const runtime = new QqRuntime({
     config: { botId: 'qq_bot', appId: 'app', ownerUserOpenid: 'owner' },
@@ -197,12 +207,13 @@ test('QQ runtime enables result-file delivery without per-bot configuration', as
       sessionExists: async () => true,
       ask: async (_sessionId, _text, options) => {
         onArtifact = options.onArtifact;
+        askObserved.resolve();
         return '完成';
       },
     },
     state: {
       hasSeen: () => false,
-      markSeen: async () => finished.resolve(),
+      markSeen: async () => {},
       sessionFor: () => 'session-existing',
       setSession: async () => {},
       clearSession: async () => {},
@@ -222,7 +233,7 @@ test('QQ runtime enables result-file delivery without per-bot configuration', as
     messageId: 'qq-artifact-gate',
     replyTarget: { scope: 'c2c', targetId: 'owner', msgId: 'qq-artifact-gate' },
   });
-  await finished.promise;
+  await askObserved.promise;
   assert.equal(typeof onArtifact, 'function');
   await runtime.stop();
 });

@@ -17,11 +17,13 @@ import {
 test('multi-bot endpoints are bot-scoped and keep legacy operations separate', () => {
   assert.equal(FEISHU_ENDPOINTS.beginCallbackRepair, 'bot.callback-repair.begin');
   assert.equal(FEISHU_ENDPOINTS.beginGroupMessagePermission, 'bot.group-message-permission.begin');
-  assert.equal(FEISHU_ENDPOINTS.bindApplication, 'bot.bind-application');
   assert.equal(FEISHU_ENDPOINTS.reconnectBot, 'bot.reconnect');
   assert.equal(FEISHU_ENDPOINTS.disconnectBot, 'bot.disconnect');
   assert.equal(FEISHU_ENDPOINTS.deleteBot, 'bot.delete');
   assert.equal(FEISHU_ENDPOINTS.setGroupResponseMode, 'bot.group-response-mode.set');
+  assert.equal(FEISHU_ENDPOINTS.setGroupTopicReply, 'bot.group-topic-reply.set');
+  assert.equal(FEISHU_ENDPOINTS.setStepPush, 'bot.step-push.set');
+  assert.equal(FEISHU_ENDPOINTS.setStepPushMode, 'bot.step-push-mode.set');
   assert.equal(FEISHU_ENDPOINTS.testConnection, 'connection.test');
 });
 
@@ -37,6 +39,9 @@ test('client normalizes multiple independent bots and derives authoritative tota
         connected: true,
         configured: true,
         groupResponseMode: 'all',
+        groupTopicReply: true,
+        stepPush: true,
+        stepPushMode: 'streaming_card',
         groupMessagePermissionGranted: true,
         bot: {
           name: '销售助手',
@@ -52,20 +57,14 @@ test('client normalizes multiple independent bots and derives authoritative tota
         state: 'connected',
         connected: false,
         configured: true,
+        groupTopicReply: 'stale-truthy', // must normalize to false
+        stepPush: 'stale-truthy', // must normalize to false
+        stepPushMode: 'stale-unknown', // must normalize to the legacy post presentation
         bot: { name: '研发助手', domain: 'lark' },
         health: { status: 'offline', summary: '等待重连' },
         error: { code: 'connection_failed', message: '连接失败' },
       },
     ],
-    applications: [{
-      applicationId: 'app-shared',
-      name: '共享应用',
-      appIdMasked: 'cli_shar••••ared',
-      domain: 'feishu',
-      botIds: ['bot-a'],
-      usedByPersonal: true,
-      secretRef: 'must-not-leak',
-    }],
   });
 
   assert.equal(snapshot.schemaVersion, 2);
@@ -73,23 +72,19 @@ test('client normalizes multiple independent bots and derives authoritative tota
   assert.deepEqual(snapshot.totals, { configured: 2, connected: 1 });
   assert.equal(snapshot.bots[0].state, 'connected');
   assert.equal(snapshot.bots[0].groupResponseMode, 'all');
+  assert.equal(snapshot.bots[0].groupTopicReply, true);
+  assert.equal(snapshot.bots[0].stepPush, true);
+  assert.equal(snapshot.bots[0].stepPushMode, 'streaming_card');
   assert.equal(snapshot.bots[0].groupMessagePermissionGranted, true);
   assert.equal(snapshot.bots[1].groupResponseMode, 'mention');
+  assert.equal(snapshot.bots[1].groupTopicReply, false);
+  assert.equal(snapshot.bots[1].stepPush, false);
+  assert.equal(snapshot.bots[1].stepPushMode, 'post');
   assert.equal(snapshot.bots[1].groupMessagePermissionGranted, false);
   assert.equal(snapshot.bots[1].state, 'connecting');
   assert.equal(snapshot.bots[1].bot.domain, 'lark');
   assert.equal(snapshot.bots[1].error.message, '连接失败');
   assert.equal('clientSecret' in snapshot.bots[0].bot, false);
-  assert.deepEqual(snapshot.applications, [{
-    applicationId: 'app-shared',
-    name: '共享应用',
-    appIdMasked: 'cli_shar••••ared',
-    domain: 'feishu',
-    botIds: ['bot-a'],
-    botCount: 1,
-    usedByPersonal: true,
-  }]);
-  assert.equal('secretRef' in snapshot.applications[0], false);
 });
 
 test('multi-bot snapshot rejects entries without an opaque botId', () => {

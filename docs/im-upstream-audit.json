@@ -1,0 +1,2354 @@
+{
+  "upstream": "34a370bfef1fcf577327b822d2091d2157ded0f8",
+  "local": "2232cf6bad6fb45058ad793d0df6dbbfb7b0de25",
+  "complete": true,
+  "counts": {
+    "equal": 489,
+    "reviewed-fork-difference": 30,
+    "fork-only": 59
+  },
+  "files": [
+    {
+      "path": "plugin-src/client/access-policy-settings.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/agent-preset.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/bot-alias.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/build.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Fork package identity and build externals, including personal authorization."
+    },
+    {
+      "path": "plugin-src/client/channel-card-meta.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channel-logos.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/dingtalk/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/dingtalk/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/dingtalk/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/discord/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/discord/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/discord/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/feishu/api.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Shared Feishu application service and reusable application provisioning."
+    },
+    {
+      "path": "plugin-src/client/channels/feishu/group-settings.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/feishu/index.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Shared Feishu application service and reusable application provisioning."
+    },
+    {
+      "path": "plugin-src/client/channels/feishu/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/imessage/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/imessage/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/imessage/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/office/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/office/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/office/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/qq/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/qq/index.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Retain manual QQ credentials; the QR SDK is UNLICENSED and remains excluded."
+    },
+    {
+      "path": "plugin-src/client/channels/qq/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/shared/collapsible-account.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/shared/token-api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/shared/token-channel.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/slack/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/slack/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/slack/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/telegram/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/telegram/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/telegram/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/wecom-app/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/wecom-app/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/wecom-app/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/wecom/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/wecom/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/wecom/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/weixin/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/weixin/connection-error.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/weixin/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/weixin/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/whatsapp/api.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/whatsapp/index.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/channels/whatsapp/styles.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/connection-catalog.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/dingtalk-personal/api.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/dingtalk-personal/index.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/dingtalk-personal/status-cache.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/dingtalk-personal/styles.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/dingtalk-personal/view-model.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/feishu-personal/api.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/feishu-personal/index.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/connectors/feishu-personal/styles.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/context-enhancement.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/credential-binding.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/delivery-settings.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/global-settings.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/i18n.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Connection center, personal authorization translations and existing visual treatment."
+    },
+    {
+      "path": "plugin-src/client/index.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Connection center, personal authorization translations and existing visual treatment."
+    },
+    {
+      "path": "plugin-src/client/interface-language.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/last-message-error.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/lifecycle.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/loopback-recovery.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/model-setting.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/session-channel-logos.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/settings-nav-icon.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/client/styles.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Connection center, personal authorization translations and existing visual treatment."
+    },
+    {
+      "path": "plugin-src/client/update-panel.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/upstream-im.js",
+      "status": "reviewed-fork-difference",
+      "reason": "Upstream settings embedded under connection center with a settings registration hook."
+    },
+    {
+      "path": "plugin-src/client/workspace-directory-picker.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/workspace-editor.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/client/workspace-snapshot-fence.js",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/build.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Fork package identity and build externals, including personal authorization."
+    },
+    {
+      "path": "plugin-src/host/channels/dingtalk/connection-supervisor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/dingtalk/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/dingtalk/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/dingtalk/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/discord/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/discord/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/discord/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/feishu/connection-supervisor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/feishu/controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/feishu/credential-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/feishu/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/feishu/production.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Shared Feishu application service and reusable application provisioning."
+    },
+    {
+      "path": "plugin-src/host/channels/feishu/rpc.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Shared Feishu application service and reusable application provisioning."
+    },
+    {
+      "path": "plugin-src/host/channels/imessage/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/imessage/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/imessage/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/office/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/office/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/office/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/qq/connection-supervisor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/qq/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/qq/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/qq/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/access-policy-production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/access-policy-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/agent-preset-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/bot-alias-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/connection-supervisor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/context-enhancement-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/model-setting-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/startup-error.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/startup.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/shared/workspace-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/slack/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/slack/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/slack/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/telegram/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/telegram/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/telegram/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom-app/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom-app/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom-app/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom/connection-supervisor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/wecom/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/weixin/connection-supervisor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/weixin/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/weixin/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/weixin/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/whatsapp/index.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/whatsapp/production.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/channels/whatsapp/rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/archive.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/capabilities.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/commands.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/dws-provision.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/dws.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/index.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/intent-routing.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/prompt.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/rpc.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/service.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/skills-provision.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/status-output.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/dingtalk-personal/tools.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/application-scopes.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/application-selection.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/authorization-state.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/capabilities.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/concurrency.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/identity.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/index.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/larkcli-provision.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/larkcli.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/permissions.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/register.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/scopes.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/connectors/feishu-personal/skills-provision.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/delivery-adapter.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/delivery-http.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/delivery-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/delivery-service.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/delivery-suggestions.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/feishu-application-service.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "plugin-src/host/harness-command-executor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/harness-connection.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/harness-session-coordinator.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/host-language-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/host-language.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/inbound-ttl-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/inbound-ttl-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/inbound-ttl-service.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/index.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Fork host composes upstream activation with the shared application service and personal connectors."
+    },
+    {
+      "path": "plugin-src/host/injected-context.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/lark-sdk-handshake-patch.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/modern-harness-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/rpc-authority.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/session-sync-coordinator.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/session-title-prefix.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/update-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/host/update-runtime.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package."
+    },
+    {
+      "path": "plugin-src/host/update-service.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries."
+    },
+    {
+      "path": "plugin-src/host/upstream-im.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "One additionalChannels extension point; upstream activation otherwise unchanged."
+    },
+    {
+      "path": "plugin-src/management-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "plugin-src/shared/connectors/dingtalk-personal-contract.js",
+      "status": "fork-only"
+    },
+    {
+      "path": "src/channels/dingtalk/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/connection-error.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/device-auth.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/dingtalk-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/dingtalk-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/dingtalk-card-stream.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/dingtalk-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/dingtalk-menu.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/dingtalk-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/dingtalk/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/discord-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/discord-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/discord-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/discord-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/discord/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/application-registry.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "src/channels/feishu/bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/config.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/feishu-app.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/feishu-cards.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/feishu-channel.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/feishu-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/group-message-permission-manager.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/group-response-mode.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/message-utils.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/multi-bot-controller.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Shared Feishu application service and reusable application provisioning."
+    },
+    {
+      "path": "src/channels/feishu/plugin-config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/plugin-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/registration-manager.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/repair-manager.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/slash-command-registry.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/feishu/step-push-mode.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/imessage-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/imessage-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/imessage/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/office/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/office/office-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/office/office-job-executor.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/office/office-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/office/office-transport.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/office/protocol.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/markdown-reply.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/qq-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/qq-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/qq-menu.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/qq-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/qr-auth.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Retain manual QQ credentials; the QR SDK is UNLICENSED and remains excluded."
+    },
+    {
+      "path": "src/channels/qq/state-error.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/qq/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/access-policy.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/agent-preset.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/batch-input.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/bot-alias.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/bot-workspace-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/command-catalog.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/command-permission.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/compact-command.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/config-read-error.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/connection-test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/context-enhancement.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/control-command.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/conversation-state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/deferred-delivery-coordinator.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/deferred-delivery.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/deferred-state.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/editable-message-stream.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/file-download.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/harness-approval.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards."
+    },
+    {
+      "path": "src/channels/shared/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/harness-mux.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/harness-question.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/harness-session-binding.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/history-command.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/dingtalk.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/discord.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/feishu.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/office.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/qq.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/shared-a.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/shared-b.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/shared-c.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/slack.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/telegram.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/wecom-app.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/wecom.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/weixin.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n-en/whatsapp.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/i18n.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/im-source-guidance.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/image-prompt.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/inbound-access.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/inbound-file.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/inbound-ttl-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/inbound-ttl.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/injected-context.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/interface-language-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/interface-language.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/message-failure.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/model-command.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/model-setting.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/preset-command.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/semantic/artifact-delivery.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/semantic/artifact.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/semantic/delivery.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/semantic/reply-reference.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/session-binding-lock.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/session-channel-labels.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/session-reply-recovery.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/session-sync-registry.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/session-title.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/status-reaction.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/text-harness-bridge.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards."
+    },
+    {
+      "path": "src/channels/shared/token-bot-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/token-config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/workspace-command.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/shared/workspace-session.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/manifest.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/slack-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/slack-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/slack-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/slack-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/slack/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/telegram-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/telegram-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/telegram-buttons.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "src/channels/telegram/telegram-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/telegram-http.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/telegram-rich-message.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/telegram/telegram-runtime.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards."
+    },
+    {
+      "path": "src/channels/wecom-app/callback-server.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/wecom-app-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/wecom-app-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/wecom-app-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom-app/wecom-app-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/qr-auth.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/send-error.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/wecom-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/wecom-cards.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/wecom-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/wecom/wecom-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/connection-error.en.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/connection-error.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/diagnostic-details.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/weixin-api.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/weixin-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/weixin-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/weixin/weixin-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/config-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/harness-client.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/state-store.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/whatsapp-bridge.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/whatsapp-controller.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/whatsapp-runtime.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "src/channels/whatsapp/whatsapp-web-session.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/access-policy-host.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/access-policy.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/agent-preset-session-lifecycle.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/artifact-delivery.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/batch-input.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/bot-alias-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/bot-alias.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/browser/model-setting.fixture.js",
+      "status": "equal"
+    },
+    {
+      "path": "test/browser/session-channel-logos.fixture.js",
+      "status": "equal"
+    },
+    {
+      "path": "test/browser/weixin-diagnostics.fixture.js",
+      "status": "equal"
+    },
+    {
+      "path": "test/channel-conversation-workspace.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/access-policy-fixture.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/client-lifecycle.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/client-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/config-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/connection-error.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/connection-supervisor.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/device-auth.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/dingtalk-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/dingtalk-bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/dingtalk-card-stream.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/dingtalk-controller.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/dingtalk-menu.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/dingtalk-runtime.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/harness-client.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/plugin-host.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/rpc.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/dingtalk/state-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/discord/client-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/discord/discord.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/discord/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/application-registry.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/channels/feishu/bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/config.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/connection-supervisor.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/connection-test-client.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/feishu-app.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/feishu-cards.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/feishu-channel.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/feishu-proxy.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/feishu-runtime.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/fixtures/lark-sdk-close-during-handshake.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/group-message-permission-manager.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/harness-client.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/lark-sdk-handshake-patch.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/message-utils.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/multi-bot-controller.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/plugin-config-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/plugin-controller.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/plugin-host.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/registration-manager.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/repair-manager.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/session-sync.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/slash-command-registry.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/feishu/state-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/imessage/imessage-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/imessage/rpc.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/imessage/runtime.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/channels/office/office.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/client-ui.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Retain manual QQ credentials; the QR SDK is UNLICENSED and remains excluded."
+    },
+    {
+      "path": "test/channels/qq/config-and-qr.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/controller-and-rpc.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/markdown-reply.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/menu.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/runtime.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/state-recovery.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/qq/state-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/command-help.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/command-permission.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/context-enhancement-bridges.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/context-enhancement-production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/delivery-message-ids.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/fixtures/command-help.json",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/harness-apiproxy.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/harness-approval.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/harness-control.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/harness-mux.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/i18n.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Normalize CRLF before comparing source template literals with runtime dictionary keys."
+    },
+    {
+      "path": "test/channels/shared/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/startup.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests."
+    },
+    {
+      "path": "test/channels/shared/status-reaction.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/shared/text-harness-bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/slack/client-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/slack/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/slack/slack.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/buttons.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/channels/telegram/client-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/command-menu-sync.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/command-menu.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/fork-telegram.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/channels/telegram/interaction-card.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/rich-message.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/telegram-http.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/telegram/telegram.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom-app/api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom-app/bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom-app/callback-server.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom-app/config-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/cards.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/client-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/config-and-qr.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/controller-and-rpc.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/runtime.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/send-error.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/wecom/startup.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/connection-diagnostics.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/connection-supervisor.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/harness-client.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/plugin-host.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/startup-config-diagnostics.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/stores.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/weixin-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/weixin-bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/weixin-controller.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/weixin/weixin-runtime.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/whatsapp/client-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/whatsapp/fork-whatsapp.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/channels/whatsapp/production.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/whatsapp/streaming.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/channels/whatsapp/whatsapp.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/client-delivery-settings.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Test embedded upstream settings separately; retain Feishu shared-app and manual QQ UI expectations."
+    },
+    {
+      "path": "test/client-interface-language.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/client-last-message-error.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/client-lifecycle.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/client-ui.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Test embedded upstream settings separately; retain Feishu shared-app and manual QQ UI expectations."
+    },
+    {
+      "path": "test/compact-command.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/connection-catalog.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/context-enhancement-settings.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/context-enhancement-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/context-enhancement.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/control-command.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/conversation-workspace-bind-recovery.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/conversation-workspace-commands.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/conversation-workspace-races.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/conversation-workspace-switch-order.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/deferred-delivery-channels.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/deferred-delivery-coordinator.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/deferred-delivery-regressions.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/deferred-delivery.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/deferred-turn-control.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/delivery-adapter.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/delivery-http.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/delivery-receipt.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/delivery-rpc.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/delivery-service.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/dingtalk-personal-client.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/dingtalk-personal-dws.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/dingtalk-personal-service.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/dingtalk-personal-skills.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/feishu-client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/feishu-conversation-menu-stale.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/feishu-personal-application-selection.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/feishu-personal-authorization-state.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/feishu-personal-capabilities.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/feishu-personal-client.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/feishu-personal-larkcli.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/feishu-personal-register.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/fixtures/management-rpc.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/fork-client-ui.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/fork-host-modern-harness-api.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/fork-host.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/harness-reply-tracker.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/history-bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/history-command.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/history-i18n.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/host-harness-connection.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests."
+    },
+    {
+      "path": "test/host-language.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/host-modern-harness-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/host-session-coordinator.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/host.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests."
+    },
+    {
+      "path": "test/image-bridge.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/image-fallback.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/image-prompt.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/inbound-file.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/inbound-ttl.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/injected-context.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/loopback-recovery.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/management-rpc.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/message-failure.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/model-command.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/model-session-lifecycle.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/model-setting-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/model-setting.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/outbound-artifact.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/preset-command.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/random-badge-worker.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/reply-reference.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/rpc-authority.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/session-bind-command.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/session-bind-store.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/session-channel-labels.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/session-sync-coordinator.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/session-title-prefix.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/session-title.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/support/filesystem.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/update-rpc.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests."
+    },
+    {
+      "path": "test/update-runtime.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package."
+    },
+    {
+      "path": "test/update-service.test.mjs",
+      "status": "reviewed-fork-difference",
+      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries."
+    },
+    {
+      "path": "test/update-ui.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/weixin-client-api.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/workspace-editor.test.mjs",
+      "status": "equal"
+    },
+    {
+      "path": "test/workspace.test.mjs",
+      "status": "equal"
+    }
+  ]
+}

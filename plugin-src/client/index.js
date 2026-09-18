@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { apply as applyUpstreamIm, IMSettingsTab as UpstreamIMSettingsTab } from './upstream-im.js';
 
 import {
   CHANNEL_GROUPS,
@@ -9,7 +10,7 @@ import {
   installConnectionStyles,
   preloadConnectionStatuses,
 } from './connection-catalog.js';
-import { en, h, IM_LOCALE_NAMESPACE, setImTranslator, zh } from './i18n.js';
+import { h, IM_LOCALE_NAMESPACE } from './i18n.js';
 import {
   createLoopbackAwareRpcCalls,
   replacePageLocation,
@@ -161,7 +162,7 @@ export function IMSettingsTab(props) {
       role: 'tabpanel',
       'aria-labelledby': `${groupTabsId}-tab-${activeGroup.id}`,
     },
-    h('div', { className: 'dim-layout' },
+    activeGroup.id === 'im-bots' ? h(UpstreamIMSettingsTab, { ...props, embedded: true }) : h('div', { className: 'dim-layout' },
       h('nav', { className: 'dim-rail', role: 'tablist', 'aria-label': activeGroup.label },
         h('div', {
           key: activeGroup.id,
@@ -197,12 +198,7 @@ export function IMSettingsTab(props) {
 }
 
 export function apply(ctx) {
-  ctx.effect(
-    () => ctx.locale.register(IM_LOCALE_NAMESPACE, { zh, en }),
-    'im-settings: bilingual dictionaries',
-  );
   const t = ctx.locale.bind(IM_LOCALE_NAMESPACE);
-  setImTranslator(t);
   ctx.effect(
     () => installConnectionCenterNavIcon(),
     'dsh-connect: replace the fallback settings navigation icon',
@@ -218,20 +214,13 @@ export function apply(ctx) {
   }, 'im-settings: install combined channel styles');
 
   const rpcCalls = createConnectionRpcCalls(ctx.connection);
-  const workspaceDirectoryPicker = Object.freeze({
-    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
-    pickDirectory: () => ctx.workspaces.pickDirectory(),
+  return applyUpstreamIm(ctx, {
+    registerSettings: (registration) => ctx.slots.register({
+      ...registration,
+      id: 'connect',
+      order: 20,
+      label: () => t('连接中心'),
+      inject: () => ({ ...rpcCalls, ...registration.inject() }),
+    }, IMSettingsTab),
   });
-
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'connect',
-    order: 20,
-    label: () => t('连接中心'),
-    locale: IM_LOCALE_NAMESPACE,
-    inject: () => ({
-      ...rpcCalls,
-      workspaceDirectoryPicker,
-    }),
-  }, IMSettingsTab));
 }

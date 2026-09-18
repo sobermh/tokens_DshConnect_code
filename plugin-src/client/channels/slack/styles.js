@@ -1,8 +1,8 @@
-export const SLACK_STYLE_ID = 'tokens-dsh-connect-slack-settings';
+export const SLACK_STYLE_ID = 'xmanrui-dsh-im-slack-settings';
 
 const CSS = String.raw`
 .dsl-page { --ddt-accent: #4a154b; --ddt-accent-deep: #321033; --ddt-accent-wash: #f7eef7; }
-.dsl-avatar { color: #fff; background: #4a154b; }
+.dsl-avatar { background: linear-gradient(145deg, #fff, #f8fafb); border: 1px solid #e5e6eb; }
 .dsl-avatar svg { display: block; }
 .dsl-setup { display: grid; gap: 18px; }
 .dsl-guide { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 16px; border: 1px solid color-mix(in srgb, #4a154b 18%, var(--dsw-alias-border-l2, #e5e6eb)); border-radius: 11px; background: color-mix(in srgb, #4a154b 4%, var(--dsw-alias-bg-layer-1, #fff)); }
@@ -26,7 +26,7 @@ export function installSlackStyles() {
   const existing = document.querySelector(`style[data-plugin-css="${SLACK_STYLE_ID}"]`);
   if (existing) return () => {};
   const style = document.createElement('style');
-  style.dataset.plugin = '@tokens/dsh-connect';
+  style.dataset.plugin = '@xmanrui/dsh-im';
   style.dataset.pluginCss = SLACK_STYLE_ID;
   style.textContent = CSS;
   document.head.appendChild(style);

@@ -3,13 +3,20 @@ import { extname } from 'node:path';
 
 import { fetchImageBuffer, ImagePromptError } from '../shared/image-prompt.mjs';
 import { t } from '../shared/i18n.mjs';
+import { DINGTALK_MENU_TEMPLATE_ID, dingtalkMenuCardData } from './dingtalk-menu.mjs';
 
 export const DINGTALK_REGISTRATION_BASE_URL = 'https://oapi.dingtalk.com/';
 export const DINGTALK_API_BASE_URL = 'https://api.dingtalk.com/';
 export const DINGTALK_REGISTRATION_SOURCE = 'DING_DWS_CLAW';
 export const DINGTALK_AI_CARD_TEMPLATE_ID = '02fcf2f4-5e02-4a85-b672-46d1f715543e.schema';
+export const DINGTALK_THINKING_REACTION_NAME = '🤔思考中';
+export const DINGTALK_DONE_REACTION_NAME = '✅已完成';
+export const DINGTALK_ERROR_REACTION_NAME = '❌处理失败';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const REACTION_TIMEOUT_MS = 5_000;
+const TEXT_REACTION_ID = '2659900';
+const TEXT_REACTION_BACKGROUND_ID = 'im_bg_1';
 const REGISTRATION_STATUSES = new Set(['WAITING', 'SUCCESS', 'FAIL', 'EXPIRED']);
 
 export class DingtalkApiError extends Error {
@@ -310,16 +317,33 @@ function normalizeCardTarget(target) {
   }
   if (target?.type === 'group') {
     const openConversationId = nonEmptyString(target.openConversationId);
-    if (openConversationId) return { type: 'group', openConversationId };
+    if (openConversationId) {
+      return { type: 'group', openConversationId, atUserIds: target.atUserIds };
+    }
   }
   throw new TypeError('DingTalk AI Card target is invalid');
 }
 
-function cardData(text, flowStatus) {
+function cardMarkdown(text, target) {
+  const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+  const mentions = target?.type === 'group'
+    ? Object.entries(target.atUserIds ?? {}).map(([userId, name]) => (
+        `<a atId="${escape(userId)}">${escape(name)}</a>`
+      )).join(' ')
+    : '';
+  return normalizeDingtalkCardMarkdown(mentions ? `${mentions}\n\n${text}` : text);
+}
+
+function cardData(text, flowStatus, target) {
+  const markdown = cardMarkdown(text, target);
+  // The shared template uses msgContent for processing, finished, and
+  // failed cards. Switching its order to staticMsgContent hides the reply.
   return {
     cardParamMap: {
       flowStatus,
-      msgContent: normalizeDingtalkCardMarkdown(text),
+      msgContent: markdown,
       staticMsgContent: '',
       sys_full_json_obj: JSON.stringify({ order: ['msgContent'] }),
       config: JSON.stringify({ autoLayout: true }),
@@ -333,7 +357,7 @@ function cardDeliverBody(cardInstanceId, target, robotCode) {
     return {
       ...base,
       openSpaceId: `dtv1.card//IM_GROUP.${target.openConversationId}`,
-      imGroupOpenDeliverModel: { robotCode },
+      imGroupOpenDeliverModel: { robotCode, atUserIds: target.atUserIds },
     };
   }
   return {
@@ -406,18 +430,20 @@ export function createDingtalkApi({
   if (!source) throw new TypeError('registrationSource is required');
   const tokenCache = new Map();
   const tokenRequests = new Map();
+  const reactionTokenRequests = new Map();
   let cardSlotTail = Promise.resolve();
   let nextCardRequestAt = 0;
 
   const endpoint = (base, pathname) => new URL(pathname.replace(/^\//, ''), base);
 
-  async function accessToken({ clientId, clientSecret, signal }) {
+  async function accessToken({ clientId, clientSecret, signal, requestKind = 'normal' }) {
     const appKey = nonEmptyString(clientId);
     const appSecret = nonEmptyString(clientSecret);
     if (!appKey || !appSecret) throw new TypeError('clientId and clientSecret are required');
     const cached = tokenCache.get(appKey);
     if (cached && cached.expiresAt > now()) return cached.token;
-    if (tokenRequests.has(appKey)) return tokenRequests.get(appKey);
+    const requests = requestKind === 'reaction' ? reactionTokenRequests : tokenRequests;
+    if (requests.has(appKey)) return requests.get(appKey);
 
     const request = (async () => {
       const value = await requestJson(fetchImpl, endpoint(apiBase, 'v1.0/oauth2/accessToken'), {
@@ -431,9 +457,75 @@ export function createDingtalkApi({
       const refreshAfterMs = Math.max(1_000, (expiresInSeconds - 60) * 1_000);
       tokenCache.set(appKey, { token, expiresAt: now() + refreshAfterMs });
       return token;
-    })().finally(() => tokenRequests.delete(appKey));
-    tokenRequests.set(appKey, request);
-    return request;
+    })();
+    const shared = request.finally(() => requests.delete(appKey));
+    requests.set(appKey, shared);
+    return shared;
+  }
+
+  async function changeReaction({
+    clientId,
+    clientSecret,
+    robotCode,
+    messageId,
+    conversationId,
+    reactionName = DINGTALK_THINKING_REACTION_NAME,
+    signal,
+  }, action) {
+    const appKey = nonEmptyString(clientId);
+    const appSecret = nonEmptyString(clientSecret);
+    const botCode = nonEmptyString(robotCode) ?? appKey;
+    const openMsgId = nonEmptyString(messageId);
+    const openConversationId = nonEmptyString(conversationId);
+    const emotionName = nonEmptyString(reactionName);
+    if (!appKey || !appSecret) throw new TypeError('clientId and clientSecret are required');
+    if (!botCode) throw new TypeError('robotCode is required');
+    if (!openMsgId || !openConversationId) {
+      throw new TypeError('messageId and conversationId are required');
+    }
+    if (!emotionName) throw new TypeError('reactionName is required');
+    // Reactions deduplicate with each other but never own the normal reply's
+    // in-flight token request. Both paths may still reuse a cached token.
+    const token = await accessToken({
+      clientId: appKey,
+      clientSecret: appSecret,
+      signal,
+      requestKind: 'reaction',
+    });
+    const response = await requestJson(
+      fetchImpl,
+      endpoint(apiBase, `v1.0/robot/emotion/${action}`),
+      {
+        body: {
+          robotCode: botCode,
+          openMsgId,
+          openConversationId,
+          emotionType: 2,
+          emotionName,
+          textEmotion: {
+            emotionId: TEXT_REACTION_ID,
+            emotionName,
+            text: emotionName,
+            backgroundId: TEXT_REACTION_BACKGROUND_ID,
+          },
+        },
+        headers: { 'x-acs-dingtalk-access-token': token },
+        signal,
+        timeoutMs: REACTION_TIMEOUT_MS,
+        action: action === 'reply' ? '消息状态添加' : '消息状态撤回',
+      },
+    );
+    const rejection = response?.success === false
+      ? safeProviderCode(response?.code ?? response?.errcode) ?? 'rejected'
+      : rejectedProviderResponse(response);
+    if (rejection) {
+      throw new DingtalkApiError(
+        'reaction-rejected',
+        '钉钉服务拒绝了消息状态请求。',
+        { providerCode: rejection },
+      );
+    }
+    return true;
   }
 
   async function messageFileDownloadUrl({
@@ -501,7 +593,7 @@ export function createDingtalkApi({
     }
   }
 
-  async function failCard({ clientId, clientSecret, cardInstanceId, text, signal }) {
+  async function failCard({ clientId, clientSecret, cardInstanceId, text, target, signal }) {
     const instanceId = nonEmptyString(cardInstanceId);
     const content = nonEmptyString(text);
     if (!instanceId) throw new TypeError('cardInstanceId is required');
@@ -515,7 +607,7 @@ export function createDingtalkApi({
           outTrackId: instanceId,
           guid: randomUUID(),
           key: 'msgContent',
-          content: normalizeDingtalkCardMarkdown(content),
+          content: cardMarkdown(content, target),
           isFull: true,
           isFinalize: false,
           isError: true,
@@ -528,7 +620,7 @@ export function createDingtalkApi({
         method: 'PUT',
         body: {
           outTrackId: instanceId,
-          cardData: cardData(content, '5'),
+          cardData: cardData(content, '5', target),
           cardUpdateOptions: { updateCardDataByKey: true },
         },
         headers,
@@ -690,6 +782,28 @@ export function createDingtalkApi({
 
     accessToken,
 
+    async addReaction(request) {
+      return changeReaction(request, 'reply');
+    },
+
+    async recallReaction(request) {
+      return changeReaction(request, 'recall');
+    },
+
+    async addThinkingReaction(request) {
+      return changeReaction({
+        ...request,
+        reactionName: DINGTALK_THINKING_REACTION_NAME,
+      }, 'reply');
+    },
+
+    async recallThinkingReaction(request) {
+      return changeReaction({
+        ...request,
+        reactionName: DINGTALK_THINKING_REACTION_NAME,
+      }, 'recall');
+    },
+
     async downloadImage({
       clientId,
       clientSecret,
@@ -766,6 +880,38 @@ export function createDingtalkApi({
       }
     },
 
+    async createMenuCard({ clientId, clientSecret, target, data, signal }) {
+      const normalizedTarget = normalizeCardTarget(target);
+      const token = await accessToken({ clientId, clientSecret, signal });
+      const cardInstanceId = `dsh_menu_${randomUUID()}`;
+      const headers = { 'x-acs-dingtalk-access-token': token };
+      await cardRequest('v1.0/card/instances/createAndDeliver', {
+        body: {
+          ...cardDeliverBody(cardInstanceId, normalizedTarget, clientId),
+          cardTemplateId: DINGTALK_MENU_TEMPLATE_ID,
+          outTrackId: cardInstanceId,
+          cardData: dingtalkMenuCardData(data),
+          callbackType: 'STREAM',
+          imGroupOpenSpaceModel: { supportForward: false },
+          imRobotOpenSpaceModel: { supportForward: false },
+        },
+        headers, signal, action: '菜单卡片创建',
+      });
+      return { cardInstanceId };
+    },
+
+    async updateMenuCard({ clientId, clientSecret, cardInstanceId, data, signal }) {
+      if (!nonEmptyString(cardInstanceId)) throw new TypeError('cardInstanceId is required');
+      const token = await accessToken({ clientId, clientSecret, signal });
+      await cardRequest('v1.0/card/instances', {
+        method: 'PUT',
+        body: { outTrackId: cardInstanceId, cardData: dingtalkMenuCardData(data),
+          cardUpdateOptions: { updateCardDataByKey: true } },
+        headers: { 'x-acs-dingtalk-access-token': token }, signal, action: '菜单卡片更新',
+      });
+      return true;
+    },
+
     async createAiCard({ clientId, clientSecret, target, initialText, signal }) {
       const appKey = nonEmptyString(clientId);
       const appSecret = nonEmptyString(clientSecret);
@@ -779,50 +925,51 @@ export function createDingtalkApi({
 
       let delivered = false;
       try {
-        await cardRequest('v1.0/card/instances', {
+        // Deliver the thinking copy in the same request that first shows the
+        // card. Creating an empty instance and filling it after deliver (the
+        // previous three-request sequence) leaves a blank bubble visible in
+        // DingTalk for the time between deliver and the follow-up PUT, and
+        // leaves a permanently blank card if that PUT ever fails.
+        await cardRequest('v1.0/card/instances/createAndDeliver', {
           body: {
+            ...cardDeliverBody(cardInstanceId, normalizedTarget, appKey),
             cardTemplateId: DINGTALK_AI_CARD_TEMPLATE_ID,
             outTrackId: cardInstanceId,
-            cardData: {
-              cardParamMap: { config: JSON.stringify({ autoLayout: true }) },
-            },
+            cardData: cardData(content, '2', normalizedTarget),
             callbackType: 'STREAM',
+            cardAtUserIds: normalizedTarget.atUserIds
+              ? Object.keys(normalizedTarget.atUserIds)
+              : undefined,
             imGroupOpenSpaceModel: { supportForward: true },
             imRobotOpenSpaceModel: { supportForward: true },
           },
           headers,
           signal,
-          action: 'AI Card 创建',
-        });
-        await cardRequest('v1.0/card/instances/deliver', {
-          body: cardDeliverBody(cardInstanceId, normalizedTarget, appKey),
-          headers,
-          signal,
-          action: 'AI Card 投放',
+          action: 'AI Card 创建并投放',
         });
         delivered = true;
-        await cardRequest('v1.0/card/instances', {
-          method: 'PUT',
-          body: { outTrackId: cardInstanceId, cardData: cardData(content, '2') },
-          headers,
-          signal,
-          action: 'AI Card 启动',
-        });
-        await cardRequest('v1.0/card/streaming', {
-          method: 'PUT',
-          body: {
-            outTrackId: cardInstanceId,
-            guid: randomUUID(),
-            key: 'msgContent',
-            content: normalizeDingtalkCardMarkdown(content).replace(/\n+$/, ''),
-            isFull: true,
-            isFinalize: false,
-            isError: false,
-          },
-          headers,
-          signal,
-          action: 'AI Card 启动',
-        });
+        try {
+          await cardRequest('v1.0/card/streaming', {
+            method: 'PUT',
+            body: {
+              outTrackId: cardInstanceId,
+              guid: randomUUID(),
+              key: 'msgContent',
+              content: cardMarkdown(content, normalizedTarget).replace(/\n+$/, ''),
+              isFull: true,
+              isFinalize: false,
+              isError: false,
+            },
+            headers,
+            signal,
+            action: 'AI Card 启动',
+          });
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          // The card is already visible with the thinking copy from
+          // createAndDeliver above. Keep the instance so finishAiCard can
+          // still replace it in place instead of sending a second message.
+        }
       } catch (error) {
         if (delivered) {
           const cleanupSignal = AbortSignal.timeout(5_000);
@@ -830,7 +977,8 @@ export function createDingtalkApi({
             clientId: appKey,
             clientSecret: appSecret,
             cardInstanceId,
-            text: t('消息处理失败，请稍后重试。'),
+            text: t('卡片已结束，请查看后续消息。'),
+            target: normalizedTarget,
             signal: cleanupSignal,
           }).catch(() => undefined);
         }
@@ -839,7 +987,7 @@ export function createDingtalkApi({
       return { cardInstanceId };
     },
 
-    async updateAiCard({ clientId, clientSecret, cardInstanceId, text, signal }) {
+    async updateAiCard({ clientId, clientSecret, cardInstanceId, text, target, signal }) {
       const instanceId = nonEmptyString(cardInstanceId);
       const content = nonEmptyString(text);
       if (!instanceId) throw new TypeError('cardInstanceId is required');
@@ -851,7 +999,7 @@ export function createDingtalkApi({
           outTrackId: instanceId,
           guid: randomUUID(),
           key: 'msgContent',
-          content: normalizeDingtalkCardMarkdown(content).replace(/\n+$/, ''),
+          content: cardMarkdown(content, target).replace(/\n+$/, ''),
           isFull: true,
           isFinalize: false,
           isError: false,
@@ -863,14 +1011,16 @@ export function createDingtalkApi({
       return true;
     },
 
-    async finishAiCard({ clientId, clientSecret, cardInstanceId, text, signal }) {
+    async finishAiCard({ clientId, clientSecret, cardInstanceId, text, target, signal }) {
       const instanceId = nonEmptyString(cardInstanceId);
       const content = nonEmptyString(text);
       if (!instanceId) throw new TypeError('cardInstanceId is required');
       if (!content) throw new TypeError('text is required');
       const token = await accessToken({ clientId, clientSecret, signal });
       const headers = { 'x-acs-dingtalk-access-token': token };
-      const normalizedContent = normalizeDingtalkCardMarkdown(content);
+      const normalizedContent = cardMarkdown(content, target);
+      // Close the streaming widget before persisting the template's
+      // finished state and full answer in msgContent.
       await cardRequest('v1.0/card/streaming', {
         method: 'PUT',
         body: {
@@ -886,39 +1036,34 @@ export function createDingtalkApi({
         signal,
         action: 'AI Card 完成',
       });
-      let completed = true;
-      const completionRequest = {
+      await cardRequest('v1.0/card/instances', {
         method: 'PUT',
         body: {
           outTrackId: instanceId,
-          cardData: cardData(content, '3'),
+          cardData: cardData(content, '3', target),
           cardUpdateOptions: { updateCardDataByKey: true },
         },
         headers,
         signal,
-        action: 'AI Card 收口',
-      };
-      try {
-        await cardRequest('v1.0/card/instances', completionRequest);
-      } catch {
-        try {
-          await cardRequest('v1.0/card/instances', completionRequest);
-        } catch {
-          completed = false;
-        }
-      }
-      return { delivered: true, completed };
+        action: 'AI Card 完成状态',
+      });
+      return { delivered: true, completed: true };
     },
 
     failAiCard: failCard,
 
-    async sendText({ clientId, clientSecret, sessionWebhook, text, signal }) {
+    async sendText({ clientId, clientSecret, sessionWebhook, text, at, signal }) {
       const content = nonEmptyString(text);
       if (!content) throw new TypeError('text is required');
       const webhook = normalizeDingtalkSessionWebhook(sessionWebhook);
       const token = await accessToken({ clientId, clientSecret, signal });
+      const replyAt = at && typeof at === 'object'
+      && ((Array.isArray(at.atUserIds) && at.atUserIds.length > 0)
+          || (Array.isArray(at.atMobiles) && at.atMobiles.length > 0)
+          || at.isAtAll === true)
+          ? { at } : {};
       const response = await requestJson(fetchImpl, webhook, {
-        body: { msgtype: 'text', text: { content } },
+        body: { msgtype: 'text', text: { content }, ...replyAt },
         headers: { 'x-acs-dingtalk-access-token': token },
         signal,
         action: '消息回复',
@@ -928,6 +1073,39 @@ export function createDingtalkApi({
         throw new DingtalkApiError('send-rejected', '钉钉服务拒绝了回复消息。');
       }
       return true;
+    },
+
+    async sendRobotText({ clientId, clientSecret, target, text, signal }) {
+      if (typeof text !== 'string' || !text.trim()) throw new TypeError('text is required');
+      const content = text;
+      const normalizedTarget = normalizeFileTarget(target);
+      const token = await accessToken({ clientId, clientSecret, signal });
+      const body = {
+        robotCode: normalizedTarget.robotCode,
+        msgKey: 'sampleText',
+        msgParam: JSON.stringify({ content }),
+        ...(normalizedTarget.type === 'group'
+          ? { openConversationId: normalizedTarget.openConversationId }
+          : { userIds: [normalizedTarget.userId] }),
+      };
+      const pathname = normalizedTarget.type === 'group'
+        ? 'v1.0/robot/groupMessages/send'
+        : 'v1.0/robot/oToMessages/batchSend';
+      const response = await requestJson(fetchImpl, endpoint(apiBase, pathname), {
+        body,
+        headers: { 'x-acs-dingtalk-access-token': token },
+        signal,
+        action: '主动文字消息发送',
+      });
+      const rejection = rejectedProviderResponse(response);
+      if (rejection) {
+        throw new DingtalkApiError(
+          'send-rejected',
+          '钉钉服务拒绝了主动文字消息。',
+          { providerCode: rejection },
+        );
+      }
+      return response;
     },
 
     async sendFile(request) {

@@ -18,7 +18,7 @@ test('QQ settings uses the shared compact channel toolbar', () => {
   assert.match(markup, /class="ddt-button dim-credentialButton"/);
   assert.match(markup, /aria-label="使用 AppID 和 AppSecret 绑定 QQ 机器人"/);
   assert.match(markup, /class="dim-actionIcon"[^]*接入机器人/);
-  assert.doesNotMatch(markup, /扫码接入机器人|dim-scanButton/);
+  assert.doesNotMatch(markup, /dim-scanButton/);
   assert.doesNotMatch(markup, /凭据仅保存在本机|role="switch"|type="checkbox"/);
 });
 

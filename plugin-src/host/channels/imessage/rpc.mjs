@@ -1,13 +1,21 @@
-import { createTokenBotRpcHandler, TOKEN_BOT_ENDPOINTS } from '../shared/rpc.mjs';
+import { createTokenBotRpcHandler } from '../shared/rpc.mjs';
 import { registerManagementRpc } from '../../../management-rpc.mjs';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 
 export const IMESSAGE_RPC_CHANNEL = '/imessage';
 export const IMESSAGE_ENDPOINTS = Object.freeze({
-  ...TOKEN_BOT_ENDPOINTS,
+  status: 'connection.status',
   bindNative: 'bot.bind-native',
   bindCredentials: 'bot.bind-native',
   permissions: 'permissions.status',
+  reconnectBot: 'bot.reconnect',
+  deleteBot: 'bot.delete',
+  setWorkspace: 'bot.workspace.set',
+  setModel: 'bot.model.set',
+  setAgentPreset: 'bot.agent-preset.set',
+  setContextEnhancement: 'bot.context-enhancement.set',
+  setAccessPolicy: 'bot.access-policy.set',
+  setAlias: 'bot.alias.set',
 });
 export const IMESSAGE_RPC_ENDPOINTS = Object.freeze(Object.values(IMESSAGE_ENDPOINTS));
 
@@ -20,14 +28,13 @@ function withRpcDetails(result) {
 }
 
 export function createIMessageRpcHandler(controller) {
-  const tokenHandler = createTokenBotRpcHandler(controller, { channel: 'iMessage' });
+  const tokenHandler = createTokenBotRpcHandler(controller, {
+    channel: 'iMessage',
+  });
   return async (endpoint, payload, signal) => {
     if (endpoint === IMESSAGE_ENDPOINTS.status) {
       const value = await controller.status();
-      return {
-        ok: true,
-        value: { ...value, permissions: await controller.permissions() },
-      };
+      return { ok: true, value: { ...value, permissions: await controller.permissions() } };
     }
     if (endpoint === IMESSAGE_ENDPOINTS.permissions) {
       try {
@@ -49,8 +56,8 @@ export function createIMessageRpcHandler(controller) {
         });
       }
     }
-    const result = await tokenHandler(endpoint, payload, signal);
-    return withRpcDetails(result);
+    const translated = endpoint === IMESSAGE_ENDPOINTS.setModel ? 'bot.model.set' : endpoint;
+    return withRpcDetails(await tokenHandler(translated, payload, signal));
   };
 }
 

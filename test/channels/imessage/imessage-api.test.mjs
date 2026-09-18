@@ -11,24 +11,14 @@ import {
 
 test('normalizes private native Messages rows and ignores bot identities', () => {
   const message = normalizeIMessage({
-    rowid: 3,
-    guid: 'p:1',
-    chatGuid: 'any;-;+8613800000000',
-    serviceName: 'iMessage',
-    text: 'hello',
-    sender: '+8613800000000',
-    receivedAt: '2026-09-07T00:00:00.000Z',
+    rowid: 3, guid: 'p:1', chatGuid: 'any;-;+8613800000000', serviceName: 'iMessage', text: 'hello',
+    sender: '+8613800000000', receivedAt: '2026-09-07T00:00:00.000Z',
   }, { botId: 'macos-messages' });
   assert.equal(message.conversationId, 'any;-;+8613800000000');
   assert.equal(message.content, 'hello');
   assert.equal(message.replyTarget.address, '+8613800000000');
   assert.equal(message.replyTarget.serviceName, 'iMessage');
-  assert.equal(normalizeIMessage({
-    guid: 'p:2',
-    chatGuid: 'c',
-    text: 'echo',
-    sender: 'macos-messages',
-  }, { botId: 'macos-messages' }), null);
+  assert.equal(normalizeIMessage({ guid: 'p:2', chatGuid: 'c', text: 'echo', sender: 'macos-messages' }, { botId: 'macos-messages' }), null);
 });
 
 test('reads Messages database rows after a durable cursor', async () => {
@@ -37,20 +27,13 @@ test('reads Messages database rows after a durable cursor', async () => {
     dbPath: '/tmp/chat.db',
     execFileImpl: async (file, args) => {
       calls.push({ file, args });
-      return {
-        stdout: '[{"rowid":4,"guid":"p:4","chatGuid":"c","serviceName":"iMessage","text":"hello","sender":"+1"}]',
-      };
+      return { stdout: '[{"rowid":4,"guid":"p:4","chatGuid":"c","serviceName":"iMessage","text":"hello","sender":"+1"}]' };
     },
     osascriptImpl: async () => ({ stdout: 'Messages' }),
   });
-  assert.deepEqual(await api.listMessages({ after: 3, limit: 10 }), [{
-    rowid: 4,
-    guid: 'p:4',
-    chatGuid: 'c',
-    serviceName: 'iMessage',
-    text: 'hello',
-    sender: '+1',
-  }]);
+  assert.deepEqual(await api.listMessages({ after: 3, limit: 10 }), [
+    { rowid: 4, guid: 'p:4', chatGuid: 'c', serviceName: 'iMessage', text: 'hello', sender: '+1' },
+  ]);
   assert.equal(calls[0].args[0], '-json');
   assert.match(calls[0].args.at(-1), /ROWID > 3/);
   assert.match(calls[0].args.at(-1), /c\.service_name = 'iMessage'/);
@@ -77,16 +60,9 @@ test('sends text through the native Messages AppleScript bridge', async () => {
   const scripts = [];
   const api = new MacOSMessagesApi({
     execFileImpl: async () => ({ stdout: '' }),
-    osascriptImpl: async (script) => {
-      scripts.push(script);
-      return { stdout: '' };
-    },
+    osascriptImpl: async (script) => { scripts.push(script); return { stdout: '' }; },
   });
-  assert.deepEqual(await api.sendText({
-    chatGuid: 'any;-;+8613800000000',
-    address: '+8613800000000',
-    text: 'hi',
-  }), { sent: true });
+  assert.deepEqual(await api.sendText({ chatGuid: 'any;-;+8613800000000', address: '+8613800000000', text: 'hi' }), { sent: true });
   assert.match(scripts[0], /buddy "\+8613800000000"/);
   assert.ok(scripts[0].includes(`send ${JSON.stringify(`${IMESSAGE_BOT_REPLY_PREFIX}hi`)}`));
 });
@@ -149,13 +125,9 @@ test('normalization never accepts an unmarked outgoing contact message', () => {
   assert.equal(normalizeIMessage({ ...row, isFromMe: 0, text: `${IMESSAGE_BOT_REPLY_PREFIX}reply` }), null);
 });
 
-test('rejects malformed chat targets and non-iMessage rows', () => {
+test('rejects malformed chat targets', () => {
   assert.throws(() => normalizeIMessageTarget(''), /chatGuid is required/);
   assert.equal(normalizeIMessage({
-    guid: 'p:3',
-    chatGuid: 'any;-;10000',
-    serviceName: 'SMS',
-    text: 'spam',
-    sender: '10000',
+    guid: 'p:3', chatGuid: 'any;-;10000', serviceName: 'SMS', text: 'spam', sender: '10000',
   }), null);
 });

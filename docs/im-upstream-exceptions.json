@@ -1,0 +1,125 @@
+{
+  "upstream": "34a370bfef1fcf577327b822d2091d2157ded0f8",
+  "files": {
+    "plugin-src/client/build.mjs": {
+      "reason": "Fork package identity and build externals, including personal authorization.",
+      "sha256": "79d39eddbb48b56ce8752017beeb449fdc9f54f964900d98e6b6d314caa65538"
+    },
+    "plugin-src/host/build.mjs": {
+      "reason": "Fork package identity and build externals, including personal authorization.",
+      "sha256": "b5e9bc1f2f4941a55d4a6646c2596595ce63a181c0a090dafd8090f586b12f0f"
+    },
+    "plugin-src/client/channels/feishu/api.js": {
+      "reason": "Shared Feishu application service and reusable application provisioning.",
+      "sha256": "26995520d0865d97e67e0bd00478e72130b2f9a453013edce540073da4facc0c"
+    },
+    "plugin-src/client/channels/feishu/index.js": {
+      "reason": "Shared Feishu application service and reusable application provisioning.",
+      "sha256": "8cabe8c9ae56996f791ee24a3e164e1e166e5d98dab1c8f2fd0622236b5ef44d"
+    },
+    "plugin-src/host/channels/feishu/production.mjs": {
+      "reason": "Shared Feishu application service and reusable application provisioning.",
+      "sha256": "7d724b485cbcfe0ca8f4b726dad202cfa013e1e5fcbc00fd8ae3ffe94ad35f9f"
+    },
+    "plugin-src/host/channels/feishu/rpc.mjs": {
+      "reason": "Shared Feishu application service and reusable application provisioning.",
+      "sha256": "0f616614787fa0848acb3887b161981719be60038e1db5a65236dd625870617f"
+    },
+    "src/channels/feishu/multi-bot-controller.mjs": {
+      "reason": "Shared Feishu application service and reusable application provisioning.",
+      "sha256": "40878b9d4ffa77cc8c8e9f9873892efc143643f3c85216de7ece4ab34c3d03b9"
+    },
+    "plugin-src/client/channels/qq/index.js": {
+      "reason": "Retain manual QQ credentials; the QR SDK is UNLICENSED and remains excluded.",
+      "sha256": "b9d78b71790b392b2fe46b0f7c4485fde6629b49891dd67ad0357adb75f3ee36"
+    },
+    "src/channels/qq/qr-auth.mjs": {
+      "reason": "Retain manual QQ credentials; the QR SDK is UNLICENSED and remains excluded.",
+      "sha256": "c4460f9d3fd1de7a8987fb8c898897dcf228e4eaecd305481d5ce52b685247ae"
+    },
+    "test/channels/qq/client-ui.test.mjs": {
+      "reason": "Retain manual QQ credentials; the QR SDK is UNLICENSED and remains excluded.",
+      "sha256": "5c1fcff4a0e333fca3d609afefdf06b139b5001a018dc86cf4e1474b33270bc8"
+    },
+    "plugin-src/client/i18n.js": {
+      "reason": "Connection center, personal authorization translations and existing visual treatment.",
+      "sha256": "b543846f7f8fe977b996e2184e275d9567fa2b2db9f4acad674e462dc22b36f8"
+    },
+    "plugin-src/client/index.js": {
+      "reason": "Connection center, personal authorization translations and existing visual treatment.",
+      "sha256": "22f575c33a36ba5fbcbbcae047e22af310f1b0548b4ada725c01ff907db5b067"
+    },
+    "plugin-src/client/styles.js": {
+      "reason": "Connection center, personal authorization translations and existing visual treatment.",
+      "sha256": "d994542ce914518625ed545b4416d761c5e12c67cb20638a9b861f88f7f0e768"
+    },
+    "plugin-src/client/upstream-im.js": {
+      "reason": "Upstream settings embedded under connection center with a settings registration hook.",
+      "sha256": "4515f216433c6bfc612e8c8abc4a16df131bc7d14d11808f855e720f4f56abcd"
+    },
+    "plugin-src/host/index.mjs": {
+      "reason": "Fork host composes upstream activation with the shared application service and personal connectors.",
+      "sha256": "4fd4db25bc2c09d42e96e8f8b73f7814c95f2b7d0b30183f18ec09233d51c125"
+    },
+    "plugin-src/host/upstream-im.mjs": {
+      "reason": "One additionalChannels extension point; upstream activation otherwise unchanged.",
+      "sha256": "eb2f111dd6764c07820c84f04ca2e5de1ed9e64c0b2c7618fb0f5d958956c8c7"
+    },
+    "plugin-src/host/update-runtime.mjs": {
+      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package.",
+      "sha256": "394b5814fad42f687835e81fd7ac1f5a9cf2ac8ae4db325a44badb19b1f35f2b"
+    },
+    "test/update-runtime.test.mjs": {
+      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package.",
+      "sha256": "54317175a81c0ec9cb35bd61adcd762fba234c98675f53eacc95d54a52def905"
+    },
+    "plugin-src/host/update-service.mjs": {
+      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries.",
+      "sha256": "a6be9e52c82d90bbd742824207aad57fb8253ed9786158688d43616fc6a4c901"
+    },
+    "test/update-service.test.mjs": {
+      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries.",
+      "sha256": "e2d311df2464f240d236ac64180c32a922bb36d281422b8517255fd8914aa491"
+    },
+    "src/channels/shared/harness-approval.mjs": {
+      "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards.",
+      "sha256": "e4cd664b5bd62aef927e158b48cc2b8a07112d723f0e08954e34aaa2ed679340"
+    },
+    "src/channels/shared/text-harness-bridge.mjs": {
+      "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards.",
+      "sha256": "2a5741301e2a020cceab953409940f94d112233eabbb3ae468b12acf675f7cce"
+    },
+    "src/channels/telegram/telegram-runtime.mjs": {
+      "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards.",
+      "sha256": "44c4b3c60aaf522ca3421594eda1f524e1e80a005df7014c2d791d09ff21c32e"
+    },
+    "test/channels/shared/i18n.test.mjs": {
+      "reason": "Normalize CRLF before comparing source template literals with runtime dictionary keys.",
+      "sha256": "4721e66cffb3e372280847892062a9abb1f6ab40f4ef55eb014acd222bcc3afc"
+    },
+    "test/channels/shared/startup.test.mjs": {
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests.",
+      "sha256": "20b7970fef31888fe7c5fe3aaa25cf0b383a361df74e6b4b62acd966670d4b86"
+    },
+    "test/host-harness-connection.test.mjs": {
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests.",
+      "sha256": "8ac4e139f323cbd48969b1c5dfc62f9404b08974f8147262f4913b341bd79db9"
+    },
+    "test/host.test.mjs": {
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests.",
+      "sha256": "4a91e247e809c7b2b6c245c53a3af9f255d54a09e5833d8a008498226da6466d"
+    },
+    "test/update-rpc.test.mjs": {
+      "reason": "Test the upstream entrypoint separately; fork integration is covered by fork-host tests.",
+      "sha256": "04da23f46fb93d2ce38d70963261f9c66205a534090676e62e7130fbe7e3eec5"
+    },
+    "test/client-delivery-settings.test.mjs": {
+      "reason": "Test embedded upstream settings separately; retain Feishu shared-app and manual QQ UI expectations.",
+      "sha256": "3f003ff577e4cef88f02b94b0c4704e77ce1de73a8dd87b0e818c2295954afd8"
+    },
+    "test/client-ui.test.mjs": {
+      "reason": "Test embedded upstream settings separately; retain Feishu shared-app and manual QQ UI expectations.",
+      "sha256": "dbef103fd860ea1abac61c6993b07ebb9bf69c34a3a001db9f71fa345ed71335"
+    }
+  }
+}

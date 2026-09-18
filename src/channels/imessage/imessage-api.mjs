@@ -93,9 +93,7 @@ export class MacOSMessagesApi {
     this.#dbPath = dbPath;
     this.#execFile = execFileImpl;
     this.#execFileOptions = { timeout: DEFAULT_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 };
-    this.#osascript = osascriptImpl ?? ((script) => this.#execFile(
-      '/usr/bin/osascript', ['-e', script], this.#execFileOptions,
-    ));
+    this.#osascript = osascriptImpl ?? ((script) => this.#execFile('/usr/bin/osascript', ['-e', script], this.#execFileOptions));
     if (typeof this.#execFile !== 'function' || typeof this.#osascript !== 'function') {
       throw new TypeError('MacOSMessagesApi requires command runners');
     }
@@ -107,24 +105,18 @@ export class MacOSMessagesApi {
       return { ...result, database: 'unsupported', automation: 'unsupported' };
     }
     try {
-      await this.#execFile(
-        '/usr/bin/sqlite3',
-        ['-json', this.#dbPath, 'SELECT 1 AS ok LIMIT 1;'],
-        this.#execFileOptions,
-      );
+      await this.#execFile('/usr/bin/sqlite3', ['-json', this.#dbPath, 'SELECT 1 AS ok LIMIT 1;'], this.#execFileOptions);
       result.database = 'granted';
     } catch (error) {
-      result.database = /authorization denied|not authorized|unable to open database/i.test(
-        String(error?.stderr ?? error),
-      ) ? 'required' : 'error';
+      result.database = /authorization denied|not authorized|unable to open database/i.test(String(error?.stderr ?? error))
+        ? 'required' : 'error';
     }
     try {
       await this.#osascript('tell application "Messages" to get name');
       result.automation = 'granted';
     } catch (error) {
-      result.automation = /not authorized|(-1743)|assistive/i.test(
-        String(error?.stderr ?? error),
-      ) ? 'required' : 'error';
+      result.automation = /not authorized|(-1743)|assistive/i.test(String(error?.stderr ?? error))
+        ? 'required' : 'error';
     }
     return result;
   }
@@ -148,19 +140,11 @@ export class MacOSMessagesApi {
         AND c.service_name = 'iMessage'${chatFilter}
       ORDER BY m.ROWID ASC LIMIT ${boundedLimit};`;
     try {
-      const { stdout } = await this.#execFile(
-        '/usr/bin/sqlite3', ['-json', this.#dbPath, query], this.#execFileOptions,
-      );
+      const { stdout } = await this.#execFile('/usr/bin/sqlite3', ['-json', this.#dbPath, query], this.#execFileOptions);
       return decodeRows(stdout);
     } catch (error) {
-      if (/authorization denied|not authorized|unable to open database/i.test(
-        String(error?.stderr ?? error),
-      )) {
-        throw permissionError(
-          'messages-database-permission-required',
-          '请在系统设置中授予 DeepSeek Harness 完全磁盘访问权限。',
-          error,
-        );
+      if (/authorization denied|not authorized|unable to open database/i.test(String(error?.stderr ?? error))) {
+        throw permissionError('messages-database-permission-required', '请在系统设置中授予 DeepSeek Harness 完全磁盘访问权限。', error);
       }
       throw error;
     }
@@ -200,11 +184,7 @@ export class MacOSMessagesApi {
       return { sent: true };
     } catch (error) {
       if (/not authorized|(-1743)|assistive/i.test(String(error?.stderr ?? error))) {
-        throw permissionError(
-          'messages-automation-permission-required',
-          '请在系统设置中允许 DeepSeek Harness 自动化控制 Messages。',
-          error,
-        );
+        throw permissionError('messages-automation-permission-required', '请在系统设置中允许 DeepSeek Harness 自动化控制 Messages。', error);
       }
       throw error;
     }

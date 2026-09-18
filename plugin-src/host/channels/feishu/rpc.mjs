@@ -1,3 +1,5 @@
+import { normalizeBotAlias } from '../../../../src/channels/shared/bot-alias.mjs';
+import { SET_ALIAS_ENDPOINT, validAliasPayload } from '../shared/bot-alias-rpc.mjs';
 import { registerManagementRpc } from '../../../management-rpc.mjs';
 import QRCode from 'qrcode';
 import {
@@ -5,19 +7,38 @@ import {
   normalizeAgentPresetId,
 } from '../../../../src/channels/shared/agent-preset.mjs';
 import { publicConnectionTestResult } from '../../../../src/channels/shared/connection-test.mjs';
+import { publicMessageFailure } from '../../../../src/channels/shared/message-failure.mjs';
+import {
+  normalizeModelCatalog,
+  normalizeModelSelection,
+} from '../../../../src/channels/shared/model-setting.mjs';
+import { normalizeAccessPolicy } from '../../../../src/channels/shared/access-policy.mjs';
 import { resolveRpcAuthority } from '../../rpc-authority.mjs';
 import { publicWorkspaceError, validWorkspacePayload } from '../shared/workspace-rpc.mjs';
 import { validAgentPresetPayload } from '../shared/agent-preset-rpc.mjs';
+import { validModelPayload } from '../shared/model-setting-rpc.mjs';
+import { validContextEnhancementPayload } from '../shared/context-enhancement-rpc.mjs';
+import { SET_ACCESS_POLICY_ENDPOINT, validAccessPolicyPayload } from '../shared/access-policy-rpc.mjs';
+import { normalizeContextEnhancementConfig } from '../../../../src/channels/shared/context-enhancement.mjs';
 import {
   isFeishuGroupResponseMode,
   normalizeFeishuGroupResponseMode,
 } from '../../../../src/channels/feishu/group-response-mode.mjs';
 import {
-  FEISHU_ENDPOINTS,
+  isFeishuStepPushMode,
+  normalizeFeishuStepPushMode,
+} from '../../../../src/channels/feishu/step-push-mode.mjs';
+import {
+  FEISHU_ENDPOINTS as FEISHU_CLIENT_ENDPOINTS,
   FEISHU_RPC_CHANNEL,
 } from '../../../client/channels/feishu/api.js';
 
-export { FEISHU_ENDPOINTS, FEISHU_RPC_CHANNEL };
+export const FEISHU_ENDPOINTS = Object.freeze({
+  ...FEISHU_CLIENT_ENDPOINTS,
+  setAccessPolicy: SET_ACCESS_POLICY_ENDPOINT,
+  setAlias: SET_ALIAS_ENDPOINT,
+});
+export { FEISHU_RPC_CHANNEL };
 export const FEISHU_MULTI_ENDPOINTS = Object.freeze({
   bindApplication: 'bot.bind-application',
   reconnectBot: 'bot.reconnect',
@@ -197,6 +218,7 @@ function connectionFacts(connection) {
 function publicBot(bot) {
   const source = bot && typeof bot === 'object' ? bot : {};
   const result = {
+    ...normalizeBotAlias(source),
     name: typeof source.name === 'string' && source.name.length > 0 ? source.name : '飞书机器人',
   };
   if (typeof source.avatarUrl === 'string') result.avatarUrl = source.avatarUrl;
@@ -276,13 +298,21 @@ function publicBotEntry(entry) {
     state: connectionState(source, registration, connected),
     connected,
     configured: source.configured === true,
+    model: normalizeModelSelection(source.model),
     agentPreset: normalizeAgentPresetId(source.agentPreset),
+    contextEnhancement: normalizeContextEnhancementConfig(source.contextEnhancement),
+    accessPolicy: normalizeAccessPolicy(source.accessPolicy),
     groupResponseMode: normalizeFeishuGroupResponseMode(source.groupResponseMode),
+    groupTopicReply: source.groupTopicReply === true,
+    stepPush: source.stepPush === true,
+    stepPushMode: normalizeFeishuStepPushMode(source.stepPushMode),
     groupMessagePermissionGranted: source.groupMessagePermissionGranted === true,
     bot: publicBot(source.bot),
     health: publicHealth(source, connected),
   };
   if (typeof source.workspace === 'string' && source.workspace) result.workspace = source.workspace;
+  const lastMessageError = publicMessageFailure(source.lastMessageError);
+  if (lastMessageError) result.lastMessageError = lastMessageError;
   const error = publicError(source.error);
   if (error) result.error = error;
   return result;
@@ -346,6 +376,7 @@ export async function toPublicFeishuStatus(status, { encodeQr = qrCodeDataUrl } 
     bots,
     applications,
     agentPresetCatalog: normalizeAgentPresetCatalog(source.agentPresetCatalog),
+    modelCatalog: normalizeModelCatalog(source.modelCatalog),
     totals: {
       configured: bots.length || (source.configured === true ? 1 : 0),
       connected: bots.length ? bots.filter((bot) => bot.connected).length : (connected ? 1 : 0),
@@ -396,9 +427,10 @@ function validPayload(endpoint, payload) {
       : 'Group message permission update requires a single valid botId.';
   }
   if (endpoint === FEISHU_ENDPOINTS.bindCredentials) {
-    return hasOnlyKeys(payload, new Set(['appId', 'appSecret']))
+    return hasOnlyKeys(payload, new Set(['appId', 'appSecret', 'domain']))
       && validCredential(payload.appId, 256)
       && validCredential(payload.appSecret, 1024)
+      && (payload.domain === undefined || payload.domain === 'feishu' || payload.domain === 'lark')
       ? null
       : 'Credential binding requires App ID and App Secret.';
   }
@@ -441,9 +473,24 @@ function validPayload(endpoint, payload) {
     return validWorkspacePayload(payload)
       ? null : '请输入工作区绝对路径。';
   }
+  if (endpoint === FEISHU_ENDPOINTS.setModel) {
+    return validModelPayload(payload) ? null : '请选择有效模型。';
+  }
   if (endpoint === FEISHU_ENDPOINTS.setAgentPreset) {
     return validAgentPresetPayload(payload)
       ? null : '请选择 Agent Preset。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setContextEnhancement) {
+    return validContextEnhancementPayload(payload)
+      ? null : '请提交有效的上下文增强设置。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setAccessPolicy) {
+    return validAccessPolicyPayload(payload)
+      ? null : '请提交有效的访问设置。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setAlias) {
+    return validAliasPayload(payload)
+      ? null : '请输入有效的别名（最多 80 个字符）。';
   }
   if (endpoint === FEISHU_ENDPOINTS.setGroupResponseMode) {
     return hasOnlyKeys(payload, new Set(['botId', 'groupResponseMode']))
@@ -451,6 +498,27 @@ function validPayload(endpoint, payload) {
       && isFeishuGroupResponseMode(payload.groupResponseMode)
       ? null
       : '请选择群聊响应方式。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setGroupTopicReply) {
+    return hasOnlyKeys(payload, new Set(['botId', 'groupTopicReply']))
+      && safeOpaqueId(payload.botId)
+      && typeof payload.groupTopicReply === 'boolean'
+      ? null
+      : '请选择是否以话题方式回复。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setStepPush) {
+    return hasOnlyKeys(payload, new Set(['botId', 'stepPush']))
+      && safeOpaqueId(payload.botId)
+      && typeof payload.stepPush === 'boolean'
+      ? null
+      : '请选择是否分步直推。';
+  }
+  if (endpoint === FEISHU_ENDPOINTS.setStepPushMode) {
+    return hasOnlyKeys(payload, new Set(['botId', 'stepPushMode']))
+      && safeOpaqueId(payload.botId)
+      && isFeishuStepPushMode(payload.stepPushMode)
+      ? null
+      : '请选择分步直推的呈现方式。';
   }
   return 'Unknown Feishu endpoint.';
 }
@@ -704,6 +772,30 @@ export function createFeishuRpcHandler(controller, { encodeQr = qrCodeDataUrl } 
           await controller.updateWorkspace(payload.botId, payload.workspace),
           { encodeQr: cachedEncodeQr },
         );
+      } else if (endpoint === FEISHU_ENDPOINTS.setModel) {
+        if (typeof controller.updateModel !== 'function') throw new Error('Model update is unavailable');
+        value = await toPublicFeishuStatus(
+          await controller.updateModel(payload.botId, payload.model),
+          { encodeQr: cachedEncodeQr },
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setContextEnhancement) {
+        if (typeof controller.updateContextEnhancement !== 'function') throw new Error('Context enhancement update is unavailable');
+        value = await controller.updateContextEnhancement(
+          payload.botId, payload.config,
+          (status) => toPublicFeishuStatus(status, { encodeQr: cachedEncodeQr }),
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setAlias) {
+        if (typeof controller.updateAlias !== 'function') throw new Error('Alias update is unavailable');
+        value = await controller.updateAlias(
+          payload.botId, payload.alias,
+          (status) => toPublicFeishuStatus(status, { encodeQr: cachedEncodeQr }),
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setAccessPolicy) {
+        if (typeof controller.updateAccessPolicy !== 'function') throw new Error('Access policy update is unavailable');
+        value = await controller.updateAccessPolicy(
+          payload.botId, payload.policy,
+          (status) => toPublicFeishuStatus(status, { encodeQr: cachedEncodeQr }),
+        );
       } else if (endpoint === FEISHU_ENDPOINTS.setAgentPreset) {
         if (typeof controller.updateAgentPreset !== 'function') throw new Error('Agent preset update is unavailable');
         value = await toPublicFeishuStatus(
@@ -716,6 +808,30 @@ export function createFeishuRpcHandler(controller, { encodeQr = qrCodeDataUrl } 
         }
         value = await toPublicFeishuStatus(
           await controller.updateGroupResponseMode(payload.botId, payload.groupResponseMode),
+          { encodeQr: cachedEncodeQr },
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setGroupTopicReply) {
+        if (typeof controller.updateGroupTopicReply !== 'function') {
+          throw new Error('Group topic reply update is unavailable');
+        }
+        value = await toPublicFeishuStatus(
+          await controller.updateGroupTopicReply(payload.botId, payload.groupTopicReply),
+          { encodeQr: cachedEncodeQr },
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setStepPush) {
+        if (typeof controller.updateStepPush !== 'function') {
+          throw new Error('Step push update is unavailable');
+        }
+        value = await toPublicFeishuStatus(
+          await controller.updateStepPush(payload.botId, payload.stepPush),
+          { encodeQr: cachedEncodeQr },
+        );
+      } else if (endpoint === FEISHU_ENDPOINTS.setStepPushMode) {
+        if (typeof controller.updateStepPushMode !== 'function') {
+          throw new Error('Step push mode update is unavailable');
+        }
+        value = await toPublicFeishuStatus(
+          await controller.updateStepPushMode(payload.botId, payload.stepPushMode),
           { encodeQr: cachedEncodeQr },
         );
       } else {

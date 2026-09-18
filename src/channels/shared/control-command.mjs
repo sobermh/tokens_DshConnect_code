@@ -1,8 +1,12 @@
+import { enhanceContextContent } from './context-enhancement.mjs';
 import { t } from './i18n.mjs';
+import manifest from '../../../package.json' with { type: 'json' };
 
-const CONTROL_COMMAND = /^\/(?:stop|steer)(?=$|\s)/iu;
+const CONTROL_COMMAND = /^\/(?:stop|steer|version)(?=$|\s)/iu;
 const STOP_COMMAND = /^\/stop(?=$|\s)/iu;
+const VERSION_COMMAND = /^\/version(?=$|\s)/iu;
 const STOP_USAGE = '用法：/stop（不带参数）';
+const VERSION_USAGE = '用法：/version（不带参数）';
 const STEER_USAGE = '用法：/steer <补充指令>';
 const TEXT_ONLY = '控制命令仅支持纯文字，请移除图片后重试。';
 
@@ -21,7 +25,7 @@ function boundSession(harness, state, key) {
   if (typeof harness?.workspaceSession !== 'function') {
     throw new TypeError('Harness does not support workspace sessions');
   }
-  const session = harness.workspaceSession(sessionId);
+  const session = harness.workspaceSession(sessionId, key);
   if (!session || typeof session !== 'object') {
     throw new TypeError('Harness returned an invalid workspace session');
   }
@@ -37,12 +41,21 @@ export async function runControlCommand(text, harness, state, key, {
   hasImages = false,
   pendingInteraction = false,
   control,
+  deferredDelivery,
+  enhancement,
 } = {}) {
   if (!isControlCommand(text)) return null;
   const command = text.trim();
   const stop = STOP_COMMAND.test(command);
+  const version = VERSION_COMMAND.test(command);
 
   if (hasImages) return commandResult(t(TEXT_ONLY));
+
+  if (version) {
+    return /^\/version$/iu.test(command)
+      ? commandResult(`dsh-im v${manifest.version}`)
+      : commandResult(t(VERSION_USAGE));
+  }
 
   if (stop) {
     if (!/^\/stop$/iu.test(command)) return commandResult(t(STOP_USAGE));
@@ -52,6 +65,13 @@ export async function runControlCommand(text, harness, state, key, {
       throw new TypeError('Harness session does not support stopping active turns');
     }
     const stopped = await session.stopActiveTurn(control, requestOptions(signal));
+    if (!stopped && deferredDelivery) {
+      const background = await deferredDelivery.stop(key);
+      if (background === 'stopped') return commandResult(t('已请求停止后台任务。'), { stopped: true });
+      if (background === 'unavailable') {
+        return commandResult(t('无法安全停止后台任务，请在 Harness 中查看并停止对应任务。'));
+      }
+    }
     return stopped
       ? commandResult(t('已请求停止当前任务。'), { stopped: true })
       : commandResult(t('当前聊天没有正在运行的任务。'));
@@ -75,8 +95,13 @@ export async function runControlCommand(text, harness, state, key, {
   if (typeof session.steerActiveTurn !== 'function') {
     throw new TypeError('Harness session does not support steering active turns');
   }
+  // A mid-turn correction carries the same provenance as the message that
+  // opened the turn, so a group member who steers is identified too.
+  const steering = enhancement
+    ? enhanceContextContent(instruction, enhancement.snapshot, enhancement.source)
+    : instruction;
   const steered = await session.steerActiveTurn(
-    instruction,
+    steering,
     control,
     requestOptions(signal),
   );

@@ -46,23 +46,26 @@ function directoryListing(path, childNames = [], { home = '/workspace', truncate
   };
 }
 
-function nativeUnavailable() {
+function nativeUnavailable({
+  code = 'directory-picker/unavailable',
+  capability = 'native',
+} = {}) {
   const error = new Error('Directory browsing is unavailable');
   error.rpcError = {
-    code: 'directory-picker-unavailable',
+    code,
     message: error.message,
-    details: { capability: 'native' },
+    details: { capability },
   };
   return error;
 }
 
-function nativeDirectoryPicker(selected) {
+function nativeDirectoryPicker(selected, unavailable = undefined) {
   const calls = { list: 0, pick: 0 };
   return {
     calls,
     async listDirectory() {
       calls.list += 1;
-      throw nativeUnavailable();
+      throw nativeUnavailable(unavailable);
     },
     async pickDirectory() {
       calls.pick += 1;
@@ -184,6 +187,121 @@ test('WorkspaceEditor browses from the current path and saves the selected direc
   assert.equal(renderer.root.findByType('code').props.title, '/workspace/current/next project');
 });
 
+test('WorkspaceEditor navigates to arbitrary absolute paths across drives and UNC shares', async () => {
+  const start = 'C:\\Users\\alice\\project';
+  const targets = [
+    'D:\\projects\\bot',
+    '\\\\server\\share\\bot',
+    '/mnt/bot',
+  ];
+  const listed = [];
+  const saved = [];
+  const picker = {
+    async listDirectory(path) {
+      listed.push(path);
+      return {
+        path,
+        home: 'C:\\Users\\alice',
+        crumbs: [{ name: path, path, hidden: false }],
+        entries: [],
+        truncated: false,
+      };
+    },
+  };
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(WorkspaceEditor, {
+      workspace: start,
+      directoryPicker: picker,
+      async onSave(value) { saved.push(value); },
+    }));
+  });
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-workspaceEdit' }).props.onClick();
+    await flushMicrotasks();
+  });
+
+  const pathForm = renderer.root.findByProps({ className: 'dim-directoryPathForm' });
+  assert.equal(renderer.root.findByProps({ className: 'dim-directoryPathInput' }).props.value, start);
+  for (const target of targets) {
+    await act(async () => {
+      renderer.root.findByProps({ className: 'dim-directoryPathInput' }).props.onChange({
+        target: { value: target },
+      });
+    });
+    assert.equal(
+      renderer.root.findByProps({ className: 'dim-directoryPickerPrimary' }).props.disabled,
+      true,
+    );
+    await act(async () => {
+      pathForm.props.onSubmit({ preventDefault() {} });
+      await flushMicrotasks();
+    });
+    assert.equal(renderer.root.findByProps({ className: 'dim-directoryPathInput' }).props.value, target);
+    assert.equal(
+      renderer.root.findByProps({ className: 'dim-directoryPickerPrimary' }).props.disabled,
+      false,
+    );
+  }
+
+  assert.deepEqual(listed, [start, ...targets]);
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-directoryPickerPrimary' }).props.onClick();
+    await flushMicrotasks();
+  });
+  assert.deepEqual(saved, [targets.at(-1)]);
+});
+
+test('WorkspaceEditor keeps the prior folder unselectable when a typed path cannot be read', async () => {
+  const start = 'C:\\Users\\alice';
+  const missing = 'Z:\\missing';
+  const picker = {
+    async listDirectory(path) {
+      if (path === missing) {
+        const error = new Error('cannot read requested folder');
+        error.rpcError = { code: 'directory-picker/unreadable', message: error.message, details: { path } };
+        throw error;
+      }
+      return {
+        path,
+        home: start,
+        crumbs: [{ name: 'Home', path, hidden: false }],
+        entries: [],
+        truncated: false,
+      };
+    },
+  };
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(WorkspaceEditor, {
+      workspace: start,
+      directoryPicker: picker,
+      async onSave() { throw new Error('must not save'); },
+    }));
+  });
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-workspaceEdit' }).props.onClick();
+    await flushMicrotasks();
+  });
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-directoryPathInput' }).props.onChange({
+      target: { value: missing },
+    });
+    await flushMicrotasks();
+  });
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-directoryPathForm' }).props.onSubmit({ preventDefault() {} });
+    await flushMicrotasks();
+  });
+
+  assert.equal(textOf(renderer.root.findByProps({ role: 'alert' })), 'cannot read requested folder');
+  assert.equal(renderer.root.findByProps({ className: 'dim-directoryPathInput' }).props.value, missing);
+  assert.equal(
+    renderer.root.findByProps({ className: 'dim-directoryPickerPrimary' }).props.disabled,
+    true,
+  );
+});
+
 test('WorkspaceEditor keeps the picker open and presents a rejected workspace error', async () => {
   const picker = {
     async listDirectory(path) {
@@ -272,6 +390,50 @@ test('WorkspaceEditor falls back to one native picker without restarting after s
   assert.equal(renderer.root.findAllByProps({ role: 'dialog' }).length, 0);
 });
 
+test('WorkspaceEditor keeps the legacy native unavailable code compatible', async () => {
+  const saved = [];
+  const picker = nativeDirectoryPicker('/workspace/legacy-native', {
+    code: 'directory-picker-unavailable',
+  });
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(WorkspaceEditor, {
+      workspace: '/workspace/current',
+      directoryPicker: picker,
+      async onSave(value) { saved.push(value); },
+    }));
+  });
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-workspaceEdit' }).props.onClick();
+    await flushMicrotasks();
+  });
+
+  assert.deepEqual(saved, ['/workspace/legacy-native']);
+  assert.deepEqual(picker.calls, { list: 1, pick: 1 });
+});
+
+test('WorkspaceEditor does not treat a non-native unavailable capability as native', async () => {
+  const picker = nativeDirectoryPicker('/workspace/must-not-pick', {
+    capability: 'browse',
+  });
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(WorkspaceEditor, {
+      workspace: '/workspace/current',
+      directoryPicker: picker,
+      async onSave() { throw new Error('must not save'); },
+    }));
+  });
+  await act(async () => {
+    renderer.root.findByProps({ className: 'dim-workspaceEdit' }).props.onClick();
+    await flushMicrotasks();
+  });
+
+  assert.deepEqual(picker.calls, { list: 1, pick: 0 });
+  assert.equal(renderer.root.findAllByProps({ role: 'alert' }).length, 1);
+  assert.equal(renderer.root.findAllByProps({ role: 'dialog' }).length, 1);
+});
+
 test('WorkspaceEditor treats native picker cancellation as cancellation, not an error', async () => {
   let saves = 0;
   const picker = nativeDirectoryPicker(null);
@@ -294,40 +456,42 @@ test('WorkspaceEditor treats native picker cancellation as cancellation, not an 
   assert.equal(renderer.root.findAllByProps({ role: 'dialog' }).length, 0);
 });
 
-test('WorkspaceEditor falls back to the Host home when the saved path is unreadable', async () => {
-  const listed = [];
-  const saved = [];
-  const picker = {
-    async listDirectory(path) {
-      listed.push(path);
-      if (path === '/workspace/gone') {
-        const error = new Error('missing');
-        error.rpcError = { code: 'directory-unreadable', message: 'missing', details: { path } };
-        throw error;
-      }
-      return directoryListing('/workspace', ['projects']);
-    },
-  };
-  let renderer;
-  await act(async () => {
-    renderer = create(React.createElement(WorkspaceEditor, {
-      workspace: '/workspace/gone',
-      directoryPicker: picker,
-      async onSave(value) { saved.push(value); },
-    }));
-  });
-  await act(async () => {
-    renderer.root.findByProps({ className: 'dim-workspaceEdit' }).props.onClick();
-    await flushMicrotasks();
-  });
+for (const unreadableCode of ['directory-picker/unreadable', 'directory-unreadable']) {
+  test(`WorkspaceEditor falls back to the Host home for ${unreadableCode}`, async () => {
+    const listed = [];
+    const saved = [];
+    const picker = {
+      async listDirectory(path) {
+        listed.push(path);
+        if (path === '/workspace/gone') {
+          const error = new Error('missing');
+          error.rpcError = { code: unreadableCode, message: 'missing', details: { path } };
+          throw error;
+        }
+        return directoryListing('/workspace', ['projects']);
+      },
+    };
+    let renderer;
+    await act(async () => {
+      renderer = create(React.createElement(WorkspaceEditor, {
+        workspace: '/workspace/gone',
+        directoryPicker: picker,
+        async onSave(value) { saved.push(value); },
+      }));
+    });
+    await act(async () => {
+      renderer.root.findByProps({ className: 'dim-workspaceEdit' }).props.onClick();
+      await flushMicrotasks();
+    });
 
-  assert.deepEqual(listed, ['/workspace/gone', undefined]);
-  await act(async () => {
-    renderer.root.findByProps({ className: 'dim-directoryPickerPrimary' }).props.onClick();
-    await flushMicrotasks();
+    assert.deepEqual(listed, ['/workspace/gone', undefined]);
+    await act(async () => {
+      renderer.root.findByProps({ className: 'dim-directoryPickerPrimary' }).props.onClick();
+      await flushMicrotasks();
+    });
+    assert.deepEqual(saved, ['/workspace']);
   });
-  assert.deepEqual(saved, ['/workspace']);
-});
+}
 
 test('WorkspaceEditor moves keyboard focus into and back out of the picker', async () => {
   let dialogFocus = 0;
@@ -386,6 +550,11 @@ test('WorkspaceEditor never translates Host filesystem names in the English UI',
   const directory = renderer.root.findByProps({ title: '/workspace/current/微信' });
   assert.equal(textOf(directory), '微信');
   assert.doesNotMatch(textOf(directory), /WeChat/);
+  assert.equal(
+    renderer.root.findByProps({ className: 'dim-directoryPathInput' }).props.placeholder,
+    'Enter a full absolute path on the Host',
+  );
+  assert.ok(buttonNamed(renderer.root, 'Go'));
   await act(async () => { renderer.unmount(); });
 });
 
