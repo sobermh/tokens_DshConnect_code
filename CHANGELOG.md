@@ -6,6 +6,8 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.9.2] - 2026-10-08
+
 ### Changed / 变更
 
 - 补齐连接中心市场双语元数据，英文说明迁入 docs；生成的 lib 由构建提供。
@@ -440,10 +442,11 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.1...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.2...HEAD
 [2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
 [2.8.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.7.0...1653fe5
 [2.7.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...v2.7.0
+[2.9.2]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.0...v2.9.1
 [2.6.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.4.4...v2.6.1
 [2.3.0]: https://github.com/xmanrui/dsh-im/compare/v2.2.1...v2.3.0

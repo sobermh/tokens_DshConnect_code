@@ -1,6 +1,6 @@
 # Plugin maintenance checks — 2026-10-08
 
-This records local validation of unpublished optimization using the
+This records local validation of optimization before publication using the
 `tokenscowork-plugin-dev` skill. The manifest is still 2.9.1; these maintenance
 changes are not part of the existing registry release and require a new version
 before publication. At the time of local validation, no commit, push, release,
