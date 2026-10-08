@@ -4,6 +4,13 @@
 
 This file records the notable changes in each dsh-im release. Its format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and its versions follow [Semantic Versioning](https://semver.org/).
 
+## [2.9.1] - 2026-10-08
+
+### Fixed / 修复
+
+- 隔离渠道 Logo 替换标题的原始文字阴影，修复 TokensCowork 浅色主题下微信、WhatsApp 等 IM 会话标题与图标重叠；普通会话样式与卸载后的原始标题保持不变。
+  Suppress shadows on visually replaced channel titles to prevent IM logos and text from overlapping under the TokensCowork light theme, while preserving ordinary session styling and restoring host typography on unload.
+
 ## [2.8.0] - 2026-09-11
 
 ### Added / 新增
@@ -408,6 +415,7 @@ This file records the notable changes in each dsh-im release. Its format follows
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
 [Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...HEAD
+[2.9.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.0...v2.9.1
 [2.6.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.4.4...v2.6.1
 [2.3.0]: https://github.com/xmanrui/dsh-im/compare/v2.2.1...v2.3.0
 [2.2.1]: https://github.com/xmanrui/dsh-im/compare/v2.2.0...v2.2.1

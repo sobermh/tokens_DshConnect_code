@@ -80,6 +80,9 @@ function createInstallation(document) {
 ${MARKED}[${TITLE_ATTR}] {
   position: relative;
   -webkit-text-fill-color: transparent;
+  /* Transparent fill still paints inherited theme shadows of the original
+   * React text underneath the logo and replacement title. */
+  text-shadow: none !important;
   text-overflow: clip !important;
   overflow: hidden;
 }

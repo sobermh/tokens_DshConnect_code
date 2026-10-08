@@ -71,12 +71,21 @@ const text = 'data-dsh-im-session-text';
 const decorated = () => initial.slice(0, -1).every((row) => title(row.id)?.getAttribute(mark) === row.channel);
 
 async function run() {
+  const themeShadow = document.createElement('style');
+  themeShadow.textContent = 'body { text-shadow: 0 0 .42px currentColor, 0 1px 1px rgb(20 71 48 / 11%); }';
+  document.head.appendChild(themeShadow);
   render();
   await until(() => title('weixin'), 'React fixture did not mount');
+  const inheritedShadow = getComputedStyle(title('weixin')).textShadow;
+  assert(inheritedShadow !== 'none', 'theme shadow reproduction did not activate');
   const originalNode = title('weixin').firstChild;
   const originalText = title('weixin').textContent;
   let dispose = installSessionChannelLogos();
   await until(decorated, 'channel logos did not load');
+  for (const row of initial.slice(0, -1)) {
+    assert(getComputedStyle(title(row.id)).textShadow === 'none', `${row.channel} original title shadow overlaps its logo`);
+  }
+  assert(getComputedStyle(title('web')).textShadow === inheritedShadow, 'ordinary session theme shadow changed');
   assert(title('weixin').firstChild === originalNode && title('weixin').textContent === originalText, 'React text was changed');
   assert(!title('web').hasAttribute(mark) && !document.getElementById('chat-prefix').hasAttribute(mark), 'unrelated text was decorated');
   assert(document.querySelectorAll('svg').length === 0, 'SVG nodes were inserted into the React tree');
@@ -88,6 +97,7 @@ async function run() {
   assert(getComputedStyle(title('weixin')).fontSize === '14px', 'Host typography changed');
   assert(title('weixin').getBoundingClientRect().height === 20, 'row title height changed');
   await until(() => document.getElementById('search-title').getAttribute(mark) === 'feishu', 'search result is missing its logo');
+  assert(getComputedStyle(document.getElementById('search-title')).textShadow === 'none', 'search title retains the hidden original text shadow');
   assert(document.getElementById('search-title').getBoundingClientRect().width > 100, 'content-sized search title collapsed');
   checks.push('all channel SVGs, original text/node identity, typography, accessibility CSS, Web/chat exclusion, search');
 
@@ -155,6 +165,7 @@ async function run() {
   dispose();
   assert(decorated(), 'one consumer disposed another consumer');
   secondDispose();
+  assert(getComputedStyle(title('weixin')).textShadow === inheritedShadow, 'unload did not restore host typography');
   assert(!document.querySelector(`[${mark}]`), 'unload did not restore text');
   assert(!document.querySelector('[data-plugin-css="dsh-im-session-channel-logos"]'), 'unload left a stylesheet');
   render();
