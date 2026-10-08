@@ -26,7 +26,7 @@
     <img src="https://img.shields.io/badge/WhatsApp-25D366?logo=whatsapp&amp;logoColor=white" alt="WhatsApp">
   </p>
 
-  <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
+  <p><strong>简体中文</strong> · <a href="docs/README.en-US.md">English</a></p>
 </div>
 
 ---
@@ -86,10 +86,12 @@ Connect IM bots to DeepSeek Harness and authorize personal Feishu and DingTalk a
 
 ## 安装
 
-推荐从 npm 安装已发布的稳定版本：
+需要 Node.js 22.19 或更新版本；当前检查覆盖 Node 22.19 和 24，后续版本升级不设固定上限。安装前需在宿主 profile 配好有权限的私有源登录；面板检查更新复用宿主包管理器的鉴权，不向浏览器传递凭据。宿主兼容证据与验证范围见[兼容说明](docs/host-compatibility.md)。
+
+推荐从私有 npm 源安装已发布的稳定版本：
 
 ```sh
-dsh plugin --profile web add -w @tokensapi/dsh-connect@latest
+dsh plugin --profile web add -w @tokensapi/dsh-connect@latest --registry=https://npm.tokensapi.ai/
 ```
 
 重启 `dsh web`，然后打开「设置 → 连接中心」。桌面端本地测试时，把 profile 改为 `desktop`，也可以把包名替换为本机 `.tgz` 的绝对路径。
@@ -219,12 +221,13 @@ Slack 桌面端若未注册同名的原生 Slash Command，会拦截直接以 `/
 ## 本地开发
 
 ```sh
-npm install
+npm ci --ignore-scripts
+npx playwright install chromium
 npm run check
 node bin/dsh-connect.mjs install --source .
 ```
 
-`npm run check` 运行单元测试、构建 Host/Client 产物，并验证发布包不包含凭据或独立渠道设置页注册。
+`npm run check` 构建 Host/Client 产物、运行单元测试和 Chromium 图标回归，并验证发布包不包含凭据或独立渠道设置页注册。
 
 IM 管理接口默认沿用 Harness 的浏览器认证和 Host／Origin 信任检查。只要 Harness 已允许并认证当前局域网访问，便可直接查看和配置 IM 机器人，无需额外修改连接中心配置。
 

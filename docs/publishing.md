@@ -1,53 +1,76 @@
 # Private registry releases
 
-This public source repository publishes packages to `https://npm.tokensapi.ai/`
-(Verdaccio), not npmjs.com. Public source and previously published npmjs versions
-remain public. Verdaccio access is enforced by its server ACL, not npm's access flag.
+The approved repository is `sobermh/tokens_DshConnect_code`; its package is
+`@tokensapi/dsh-connect`, published to `https://npm.tokensapi.ai/` (Verdaccio).
+Registry ACLs control access. Public source code does not imply public package
+access, and public npm remains only a source for build dependencies.
 
-## One-time setup
+## Setup and authorization
 
-Set the GitHub repository Actions secret `VERDACCIO_PUBLISH_TOKEN` to a valid
-Verdaccio token issued for the approved `tokenscowork` publisher. A `market`
-read-only credential cannot publish. Use `npm login --auth-type=legacy
---registry=https://npm.tokensapi.ai/` to obtain a publisher session through your
-normal credential-management process. Never commit `.npmrc` credentials or paste
-tokens into logs. Tokens expire and must be rotated when needed.
+Configure the repository Actions secret `VERDACCIO_PUBLISH_TOKEN` through the
+normal credential-management process. The authenticated publisher must be
+`tokenscowork`; a market read-only credential cannot publish. Never commit
+credentials or show `.npmrc` contents. Protect `v*` tags for release maintainers.
+On a new fork, check the real Actions page for workflow enablement before an
+authorized push: API `active` alone does not prove push triggers work.
 
-Protect `v*` tags with repository rulesets so only release maintainers can create
-them. On a new fork, open the repository Actions page while signed in and confirm
-`I understand my workflows, go ahead and enable them`. Until this fork-specific
-confirmation is completed, automatic push runs can remain disabled even when the
-Actions permissions API reports `enabled: true`, the workflow reports `active`,
-and manual dispatches succeed. Verify activation with an actual push-triggered run.
-This registry uses a secret-backed token;
-npmjs Trusted Publishing/OIDC is not configured for Verdaccio.
+Source optimization does not by itself authorize a commit, push or publication.
+It does not install a package into user profiles or restart the application.
 
-## Release
+## Checks and tagged releases
 
-1. Update the version in package.json and package-lock.json together, review and
-   commit the intended changes, and push main.
-2. Create and push a matching stable tag, for example `v2.9.0` for version `2.9.0`.
-3. CI validates tag/package/registry identity, installs public build dependencies,
-   runs tests, builds, verifies the package, packs it, and publishes to Verdaccio.
+`checks.yml` checks every branch push and pull request; `publish-npm.yml` accepts
+only `v*` tag pushes. There is no manual dispatch release route. To retry a failed
+release, re-run its original Actions run. If it already published the version,
+the existence guard stops a second publish; verify the existing release before
+planning any follow-up version. Do not delete or overwrite a published version.
 
-Branch pushes, pull requests and manual CI runs without `release_tag` only check.
-If the tag push does not create a run, dispatch the current main workflow with an
-existing release tag:
+Both workflows carry the same Node matrix (22.19.0 and 24). It covers the current
+minimum and active tested LTS branches; `engines` specifies a minimum rather than
+an upper cap, so later runtimes are not mechanically blocked. Extend the matrix
+when adopting a new Node LTS. Passing this matrix does not certify future Node
+majors. The release workflow deliberately repeats the check matrix because
+`needs` cannot gate across workflow files. Its publish job depends on checks in
+that same tagged run.
 
-```sh
-gh workflow run ci.yml --ref main -f release_tag=v2.9.0
-```
+Dependency installation uses `npm ci --ignore-scripts` with the checked-in lock.
+Checks install Chromium and run `npm run check`, which builds both entries, runs
+unit tests and the browser regression, and validates package artifacts. Isolated
+mock tests keep the event loop alive per test on Node 22, preserve real timer
+cleanup when using fake timers, and fail stalled tests after 30 seconds. Generated
+`lib/` is ignored in Git and built in CI, but remains in the published tarball.
+The lock fixes build inputs; it does not constrain future host upgrades.
 
-This checks out `refs/tags/v2.9.0`, validates its package identity, and runs the full
-checks before publishing. It does not publish the current main checkout or move
-the tag. Push and manual releases share a per-tag concurrency group.
-Prereleases cannot move `latest`. Authentication is exposed only in the publish
-step; publishing disables lifecycle scripts because checks/build already ran.
-No tarballs are uploaded as public GitHub artifacts or release assets.
-An existing version is not overwritten; use a new version after a published fix.
+## Release validation
 
-Publishing does not change market visibility or switch an existing market entry
-from npmjs to the self-hosted source. That is a separate administrator operation.
-Users install/update through the market; never distribute the publisher token.
-The plugin's imported upstream in-panel updater still targets npmjs; this CI change
-does not migrate that separate update mechanism to authenticated market delivery.
+For an authorized release, add a changelog section and compare link, set the
+manifest/lock version, and use the matching stable `v<version>` tag. Validation
+rejects wrong repository identity, registry, package name, prerelease versions,
+tag mismatches and missing bilingual market metadata.
+
+The publish job builds and packs with `npm pack --ignore-scripts` because checks
+already ran. It verifies the actual tarball's manifest, allowlisted paths,
+runtime entries, CLI, patch, assets and legal files, then publishes that same
+tarball with lifecycle scripts disabled and the private registry explicit.
+
+Only the final publish step receives `NODE_AUTH_TOKEN`; setup-node supplies the
+matching registry authentication configuration. Before publishing, the helper
+checks publisher identity and the exact version. Only HTTP 404 confirms absence;
+authentication, network and server failures stop the release. After publishing,
+bounded queries check the exact package/version, `latest`, and SHA-512 integrity
+against the local tarball. Pending availability is reported without republishing.
+No tarballs are uploaded as public Actions artifacts.
+
+## Installation and update boundaries
+
+Users configure authorized registry access in the host profile. The panel uses
+the host package manager's existing authentication to query the private source,
+never publisher credentials or browser token storage. Installs retain preflight,
+profile identity, cancellation, locking and recovery checks, and report when a
+restart is required without restarting the app automatically.
+
+New market metadata becomes visible only after a new version is published. A
+package release does not itself change the market administrator's visibility or
+source configuration. Local checks, remote CI, registry publication, real host
+API contracts and live account/UI acceptance are separate evidence; see
+[host compatibility](host-compatibility.md).

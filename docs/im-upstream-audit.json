@@ -1,11 +1,11 @@
 {
   "upstream": "34a370bfef1fcf577327b822d2091d2157ded0f8",
-  "local": "2232cf6bad6fb45058ad793d0df6dbbfb7b0de25",
+  "local": "6a0cc64a8e6c207b84787ab77971193bde61e1a9",
   "complete": true,
   "counts": {
-    "equal": 489,
-    "reviewed-fork-difference": 30,
-    "fork-only": 59
+    "equal": 485,
+    "reviewed-fork-difference": 34,
+    "fork-only": 62
   },
   "files": [
     {
@@ -284,7 +284,8 @@
     },
     {
       "path": "plugin-src/client/session-channel-logos.js",
-      "status": "equal"
+      "status": "reviewed-fork-difference",
+      "reason": "Preserve upstream logos and lifecycle; suppress inherited text shadows only on visually replaced channel titles."
     },
     {
       "path": "plugin-src/client/settings-nav-icon.js",
@@ -297,7 +298,8 @@
     },
     {
       "path": "plugin-src/client/update-panel.js",
-      "status": "equal"
+      "status": "reviewed-fork-difference",
+      "reason": "Manual updates target @tokensapi/dsh-connect on the private registry; retain profile/version safety and latest fallback notice."
     },
     {
       "path": "plugin-src/client/upstream-im.js",
@@ -739,12 +741,12 @@
     {
       "path": "plugin-src/host/update-runtime.mjs",
       "status": "reviewed-fork-difference",
-      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package."
+      "reason": "Query private release metadata through the existing authenticated host package-manager executor; retain bounded cancellation, profile and registry checks."
     },
     {
       "path": "plugin-src/host/update-service.mjs",
       "status": "reviewed-fork-difference",
-      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries."
+      "reason": "Validate private release metadata both at check and install revalidation; preserve fork recovery journal and use bounded Windows sharing-error retries for atomic state reads/writes."
     },
     {
       "path": "plugin-src/host/upstream-im.mjs",
@@ -1518,7 +1520,8 @@
     },
     {
       "path": "test/browser/session-channel-logos.fixture.js",
-      "status": "equal"
+      "status": "reviewed-fork-difference",
+      "reason": "Exercise inherited title shadows, live updates and complete typography restoration for the fork logo fix."
     },
     {
       "path": "test/browser/weixin-diagnostics.fixture.js",
@@ -2284,6 +2287,10 @@
       "status": "equal"
     },
     {
+      "path": "test/release-config.test.mjs",
+      "status": "fork-only"
+    },
+    {
       "path": "test/reply-reference.test.mjs",
       "status": "equal"
     },
@@ -2316,8 +2323,16 @@
       "status": "equal"
     },
     {
+      "path": "test/setup.mjs",
+      "status": "fork-only"
+    },
+    {
       "path": "test/support/filesystem.mjs",
       "status": "equal"
+    },
+    {
+      "path": "test/tarball.test.mjs",
+      "status": "fork-only"
     },
     {
       "path": "test/update-rpc.test.mjs",
@@ -2327,16 +2342,17 @@
     {
       "path": "test/update-runtime.test.mjs",
       "status": "reviewed-fork-difference",
-      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package."
+      "reason": "Exercise private authenticated metadata lookup through desktop/CLI executors, malformed responses and conflicting scope registries."
     },
     {
       "path": "test/update-service.test.mjs",
       "status": "reviewed-fork-difference",
-      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries."
+      "reason": "Exercise authenticated private metadata at check and install revalidation, reject changed releases/public origins, and retain lock/recovery coverage."
     },
     {
       "path": "test/update-ui.test.mjs",
-      "status": "equal"
+      "status": "reviewed-fork-difference",
+      "reason": "Assert fork package/private registry manual commands, safe profiles and version selection, plus the latest fallback notice."
     },
     {
       "path": "test/weixin-client-api.test.mjs",

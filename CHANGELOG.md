@@ -4,12 +4,38 @@
 
 This file records the notable changes in each dsh-im release. Its format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and its versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed / 变更
+
+- 补齐连接中心市场双语元数据，英文说明迁入 docs；生成的 lib 由构建提供。
+  Add bilingual market metadata, move English documentation into docs, and generate lib during builds.
+- 分离分支检查与标签发布，覆盖 Node 22.19/24，增加浏览器回归、实际 tarball 与私有源发布完整性检查。
+  Separate branch checks from tag releases, cover Node 22.19/24, and validate browser behavior, packed files, and registry integrity.
+- 更新检查复用宿主包管理器查询私有源；手动升级命令使用正确包名和私有 Registry。
+  Query private update metadata through the host package manager and correct the manual package name and registry.
+- 安装前复查继续使用私有源鉴权；Windows 状态读取仅对短暂共享错误做有界重试。
+  Revalidate releases with private-registry authentication before installing and bound Windows sharing-error retries when reading update state.
+- Node 与宿主要求采用最低版本范围，允许后续升级；测试环境兼容 Node 22 的无引用超时和模拟计时器。
+  Use minimum runtime requirements to allow future upgrades and support unreferenced timeouts and fake timers in the Node 22 test runner.
+
 ## [2.9.1] - 2026-10-08
 
 ### Fixed / 修复
 
 - 隔离渠道 Logo 替换标题的原始文字阴影，修复 TokensCowork 浅色主题下微信、WhatsApp 等 IM 会话标题与图标重叠；普通会话样式与卸载后的原始标题保持不变。
   Suppress shadows on visually replaced channel titles to prevent IM logos and text from overlapping under the TokensCowork light theme, while preserving ordinary session styling and restoring host typography on unload.
+
+## [2.9.0] - 2026-10-08
+
+### Changed / 变更
+
+- 同步上游 dsh-im v4.21.2（34a370bf），包含 WeCom 应用、AI Office、主动投递、Session 同步及访问、模型和上下文设置；保留本仓库个人授权、共享飞书应用、Telegram 多选/审批和手动 QQ 凭据等差异。
+  Integrate upstream dsh-im v4.21.2 (34a370bf), including WeCom applications, AI Office, proactive delivery, Session synchronization, and access/model/context settings while retaining reviewed fork extensions.
+- 结果文件返回兼容 snapshotEvents()，并增加完整源码同步审计；准确范围见 [IM 同步记录](docs/im-upstream-sync.md)。
+  Support snapshotEvents() for returned files and add full-source synchronization auditing; see the integration record for the exact scope.
+- 标签发布改用私有 npm 源 npm.tokensapi.ai。
+  Publish tagged packages to the private npm.tokensapi.ai registry.
 
 ## [2.8.0] - 2026-09-11
 
@@ -414,7 +440,10 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.1...HEAD
+[2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
+[2.8.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.7.0...1653fe5
+[2.7.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...v2.7.0
 [2.9.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.0...v2.9.1
 [2.6.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.4.4...v2.6.1
 [2.3.0]: https://github.com/xmanrui/dsh-im/compare/v2.2.1...v2.3.0

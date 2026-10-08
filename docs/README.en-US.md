@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="assets/logo-dsh-im-connecting-readme-3x2.png" alt="DSH-IM — Connecting DeepSeek Harness" width="420" height="280" align="middle">&nbsp;&nbsp;
-  <img src="assets/logo-plugin-phone.png" alt="DSH-IM phone logo" width="280" height="280" align="middle">
+  <img src="../assets/logo-dsh-im-connecting-readme-3x2.png" alt="DSH-IM — Connecting DeepSeek Harness" width="420" height="280" align="middle">&nbsp;&nbsp;
+  <img src="../assets/logo-plugin-phone.png" alt="DSH-IM phone logo" width="280" height="280" align="middle">
 </p>
 
 ---
@@ -9,7 +9,7 @@
   <p><strong>Connecting DeepSeek Harness</strong></p>
 
   <p>
-    <a href="LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshConnect_code" alt="MIT license"></a>
+    <a href="../LICENSE"><img src="https://img.shields.io/github/license/sobermh/tokens_DshConnect_code" alt="MIT license"></a>
     <img src="https://img.shields.io/badge/agent-DeepSeek%20Harness-5865f2" alt="DeepSeek Harness">
   </p>
 
@@ -25,7 +25,7 @@
     <img src="https://img.shields.io/badge/WhatsApp-25D366?logo=whatsapp&amp;logoColor=white" alt="WhatsApp">
   </p>
 
-  <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
+  <p><a href="../README.md">简体中文</a> · <strong>English</strong></p>
 </div>
 
 ---
@@ -42,7 +42,7 @@ Personal DingTalk authorization uses managed OAuth from the official [DingTalk W
 
 ## Interface
 
-![Connection Center settings page](docs/images/imbot.png)
+![Connection Center settings page](images/imbot.png)
 
 ## Built-in channels
 
@@ -83,10 +83,12 @@ After the model calls the file-return tool, the plugin hands the specified file 
 
 ## Installation
 
-Install the published stable release from npm (recommended):
+Node.js 22.19 or newer is required. Current checks cover Node 22.19 and 24; later versions are not blocked by an upper cap. Configure your authorized private-registry login in the host profile before installation. In-panel update checks reuse the host package manager authentication; registry credentials are never sent to the browser. See [host verification](host-compatibility.md) for compatibility evidence and limits.
+
+Install the published stable release from the private npm registry (recommended):
 
 ```sh
-dsh plugin --profile web add -w @tokensapi/dsh-connect@latest
+dsh plugin --profile web add -w @tokensapi/dsh-connect@latest --registry=https://npm.tokensapi.ai/
 ```
 
 Restart `dsh web`, then open **Settings → Connection Center**. For a local desktop test, use the `desktop` profile and replace the package spec with the absolute path to the local `.tgz` when needed.
@@ -216,12 +218,13 @@ If the Slack desktop app has no native Slash Command registered with the same na
 ## Local development
 
 ```sh
-npm install
+npm ci --ignore-scripts
+npx playwright install chromium
 npm run check
 node bin/dsh-connect.mjs install --source .
 ```
 
-`npm run check` runs unit tests, builds the Host and Client artifacts, and verifies that the published package contains neither credentials nor standalone channel settings-page registrations.
+`npm run check` builds Host and Client artifacts, runs unit tests and the Chromium logo regression, and verifies that the published package contains neither credentials nor standalone channel settings-page registrations.
 
 IM management uses Harness browser authentication and Host/Origin trust checks by default. Once Harness allows and authenticates access from your LAN address, you can view and configure IM bots without extra Connection Center configuration.
 
@@ -264,10 +267,10 @@ You can reach me by email, WeChat, or Xiaohongshu.
       <a href="mailto:longmanr307@gmail.com">longmanr307@gmail.com</a>
     </td>
     <td align="center" valign="top">
-      <a href="docs/images/weixin.jpg"><img src="docs/images/weixin.jpg" alt="WeChat QR code" width="240"></a>
+      <a href="images/weixin.jpg"><img src="images/weixin.jpg" alt="WeChat QR code" width="240"></a>
     </td>
     <td align="center" valign="top">
-      <a href="docs/images/xhs.jpg"><img src="docs/images/xhs.jpg" alt="Xiaohongshu QR code" width="240"></a>
+      <a href="images/xhs.jpg"><img src="images/xhs.jpg" alt="Xiaohongshu QR code" width="240"></a>
     </td>
   </tr>
 </table>

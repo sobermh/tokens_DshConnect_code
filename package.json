@@ -2,6 +2,16 @@
   "name": "@tokensapi/dsh-connect",
   "version": "2.9.1",
   "description": "统一管理 IM 机器人、AI Office 及飞书、钉钉个人账号授权，并接入本机 DeepSeek Harness。",
+  "tokenscowork": {
+    "displayName": {
+      "zh-CN": "连接中心",
+      "en-US": "Connection Center"
+    },
+    "summary": {
+      "zh-CN": "统一管理 IM 机器人、AI Office 与飞书、钉钉个人账号授权，连接本机 DeepSeek Harness。",
+      "en-US": "Manage IM bots, AI Office, and personal Feishu and DingTalk authorization through a local DeepSeek Harness."
+    }
+  },
   "keywords": [
     "deepseek-harness",
     "dsh",
@@ -67,8 +77,10 @@
     "lib",
     "LICENSE",
     "README.md",
-    "README.en.md",
-    "THIRD_PARTY_NOTICES.md"
+    "docs/README.en-US.md",
+    "THIRD_PARTY_NOTICES.md",
+    "docs/host-compatibility.md",
+    "docs/images"
   ],
   "dsh": {
     "bundle": {
@@ -85,7 +97,7 @@
       "platform": "web"
     },
     "compatibility": {
-      "dsh": "0.1.2-alpha.4 || 0.1.2-alpha.5 || 0.1.2-rc.1 || 0.1.3-alpha.1 || 0.1.5-alpha.1",
+      "dsh": ">=0.1.2-alpha.4",
       "dshReleases": {
         "0.1.2-alpha.4": "compatible",
         "0.1.2-alpha.5": "compatible",
@@ -94,20 +106,24 @@
         "0.1.5-alpha.1": "compatible"
       },
       "profiles": [
-        "web"
+        "web",
+        "desktop"
       ]
     }
   },
   "scripts": {
     "audit:im": "node scripts/audit-im-upstream.mjs 34a370bfef1fcf577327b822d2091d2157ded0f8 --check",
     "build": "node plugin-src/client/build.mjs && node plugin-src/host/build.mjs",
-    "test": "node --test test/*.test.mjs test/channels/*/*.test.mjs",
-    "check": "npm test && npm run build && node scripts/verify-package.mjs",
+    "test": "npm run build && npm run test:unit && npm run test:browser",
+    "test:unit": "node --import ./test/setup.mjs --test-timeout=30000 --test test/*.test.mjs test/channels/*/*.test.mjs",
+    "test:browser": "node scripts/test-browser.mjs",
+    "check": "npm test && node scripts/verify-package.mjs",
     "prepack": "npm run build && node scripts/verify-package.mjs",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "check:host": "node scripts/check-host-contract.mjs"
   },
   "engines": {
-    "node": ">=22.19"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "@tencent-connect/qqbot-nodejs": "1.0.4",
@@ -122,9 +138,12 @@
     "@whiskeysockets/baileys": "7.0.0-rc14",
     "esbuild": "0.25.9",
     "https-proxy-agent": "5.0.1",
+    "playwright": "1.56.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-test-renderer": "18.3.1",
-    "semver": "7.8.5"
+    "semver": "7.8.5",
+    "tar": "7.5.22",
+    "yaml": "2.9.1"
   }
 }

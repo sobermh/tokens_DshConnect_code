@@ -1,5 +1,6 @@
 import { access, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { validateRelease } from './validate-release.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const required = [
@@ -8,6 +9,7 @@ const required = [
   'bin/dsh-connect.mjs',
   'cordis.patch.yml',
   'README.md',
+  'docs/README.en-US.md',
   'THIRD_PARTY_NOTICES.md',
   'plugin-src/client/channels/dingtalk/index.js',
   'plugin-src/client/channels/slack/index.js',
@@ -50,6 +52,7 @@ const [client, host, patch, manifestText, lockText, hostSource, clientSource, ex
 ]);
 const manifest = JSON.parse(manifestText);
 const lock = JSON.parse(lockText);
+validateRelease(manifest, `v${manifest.version}`);
 
 if (manifest.name !== '@tokensapi/dsh-connect'
   || lock.name !== '@tokensapi/dsh-connect'
