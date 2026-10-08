@@ -1,9 +1,9 @@
 # Plugin maintenance checks — 2026-10-08
 
 This records local validation of optimization before publication using the
-`tokenscowork-plugin-dev` skill. The manifest is still 2.9.1; these maintenance
-changes are not part of the existing registry release and require a new version
-before publication. At the time of local validation, no commit, push, release,
+`tokenscowork-plugin-dev` skill. At validation, the manifest was 2.9.1 and these
+changes were not part of that registry release. They were subsequently published
+as 2.9.2. At the time of local validation, no commit, push, release,
 profile installation or application restart had been performed. Changes are confined to the
 independent plugin repository.
 
@@ -61,3 +61,19 @@ applied to the existing runtime dependency tree.
 
 The local installed plugin was observed at 2.9.1 during the final read-only
 inspection. This work did not change it or restore a different version.
+
+## Release follow-up
+
+Version 2.9.2 was published to `https://npm.tokensapi.ai/` from tag `v2.9.2`,
+release commit `05de4dd81528f896c3a4abf2069dde3f261b0dc8`. Both Node matrix
+checks and the publish job completed successfully in the
+[release workflow](https://github.com/sobermh/tokens_DshConnect_code/actions/runs/37755136971).
+The [branch checks](https://github.com/sobermh/tokens_DshConnect_code/actions/runs/37755136924)
+also passed.
+
+Independent authenticated registry queries confirmed the exact version and
+`latest` as 2.9.2. The downloaded published tarball contained 22 allowed files;
+its SHA-512 matched registry integrity, and the manifest contained the expected
+bilingual metadata and open minimum runtime ranges. This confirms the published
+package, not language switching or catalog rendering in a live host UI.
+No local plugin installation or application restart was performed.
