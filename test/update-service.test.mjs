@@ -10,7 +10,7 @@ function release(version = '3.0.8', fields = {}) {
   return {
     name: '@tokensapi/dsh-connect', version, engines: { node: '>=22.19' },
     dist: {
-      tarball: `https://registry.npmjs.org/@tokensapi/dsh-connect/-/dsh-connect-${version}.tgz`,
+      tarball: `https://npm.tokensapi.ai/@tokensapi/dsh-connect/-/dsh-connect-${version}.tgz`,
       integrity: `sha512-${Buffer.alloc(64, 1).toString('base64')}`,
     },
     ...fields,
@@ -45,7 +45,7 @@ async function fixture(t, options = {}) {
     runtime, runningVersion: '3.0.7', nodeVersion: '22.20.0', now: () => state.time,
     fetchImpl: async (url, init) => {
       state.fetches++;
-      assert.equal(url, 'https://registry.npmjs.org/%40tokensapi%2Fdsh-connect/latest');
+      assert.equal(url, 'https://npm.tokensapi.ai/%40tokensapi%2Fdsh-connect/latest');
       assert.equal(init.redirect, 'error');
       if (state.failFetch) throw new Error('private-path-and-token');
       return new Response(JSON.stringify(state.release));
@@ -401,4 +401,42 @@ test('the service watchdog reports timeout and waits for the owned installer to 
   assert.equal(result.job.message, 'install-timeout');
   await f.service.close();
   assert.equal((await readdir(await f.directory())).includes('install.lock'), false);
+});
+
+test('authenticated metadata from the runtime is validated instead of anonymous fetch', async (t) => {
+  const f = await fixture(t, { service: { fetchImpl: () => assert.fail('No anonymous private-registry request') } });
+  // Construct a service with the same safe environment and an authenticated reader.
+  const service = createUpdateService({
+    runtime: { inspect: async () => f.environment, readRelease: async () => release(), install: () => assert.fail('Read-only check') },
+    runningVersion: '3.0.7', nodeVersion: '24.0.0',
+    fetchImpl: () => assert.fail('No anonymous fallback'),
+  });
+  t.after(() => service.close());
+  assert.equal((await service.check()).latestVersion, '3.0.8');
+  const invalid = createUpdateService({ runtime: { inspect: async () => f.environment, readRelease: async () => release('3.0.8', { dist: { ...release().dist, tarball: 'https://registry.npmjs.org/@tokensapi/dsh-connect/-/dsh-connect-3.0.8.tgz' } }) } });
+  t.after(() => invalid.close());
+  await assert.rejects(invalid.check(), { code: 'invalid-release' });
+});
+
+test('installation revalidation also uses authenticated metadata and rejects changed releases', async t => {
+  for (const changed of [false, true]) {
+    const f = await fixture(t);
+    let reads = 0;
+    let installs = 0;
+    const service = createUpdateService({
+      runtime: {
+        inspect: async () => ({ ...f.environment }),
+        readRelease: async () => { reads++; return release(changed && reads > 1 ? '3.0.9' : '3.0.8'); },
+        install: async version => { installs++; f.environment.installedVersion = version; },
+      },
+      runningVersion: '3.0.7', nodeVersion: '24.0.0', fetchImpl: () => assert.fail('No anonymous revalidation'),
+    });
+    t.after(() => service.close());
+    const { checkId } = await service.check();
+    const request = service.install({ checkId, requestId: `authenticated-${changed}` });
+    if (changed) await assert.rejects(request, { code: 'check-expired' });
+    else { await request; await waitForJob(service, 'restart-required'); }
+    assert.equal(reads, 2);
+    assert.equal(installs, changed ? 0 : 1);
+  }
 });

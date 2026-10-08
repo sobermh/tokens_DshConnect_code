@@ -94,12 +94,13 @@ async function fixture(t, { desktop = false, name = 'update-test', hoisted = fal
   const calls = [];
   let registry = '';
   let installResult = {};
+  let metadata = '{}';
   const ctx = {
     subprocess: {
       spawn(spec) {
         calls.push(spec);
         return operation({
-          ...spec.argv.includes('config') ? { output: registry } : installResult,
+          ...spec.argv.includes('config') ? { output: registry } : spec.argv.includes('view') ? { output: metadata } : installResult,
           signal: spec.signal,
         });
       },
@@ -133,7 +134,7 @@ async function fixture(t, { desktop = false, name = 'update-test', hoisted = fal
     ctx.desktopPnpm = {
       run(args, signal) {
         calls.push({ method: 'run', args, signal });
-        return operation({ output: registry, signal });
+        return operation({ output: args.includes('view') ? metadata : registry, signal });
       },
       runPlugin(args, cwd, signal) {
         calls.push({ method: 'runPlugin', args, cwd, signal });
@@ -146,6 +147,7 @@ async function fixture(t, { desktop = false, name = 'update-test', hoisted = fal
     root, homeDir, profileDir, installedDir, installedLink, manifest, cliEntry, ctx, options, calls,
     runtime: () => createUpdateRuntime(options),
     registry: (value) => { registry = value; },
+    metadata: (value) => { metadata = value; },
     installResult: (value) => { installResult = value; },
   };
 }
@@ -289,7 +291,7 @@ test('preflight validates the effective scoped registry without exposing credent
     f.registry(output);
     assert.equal((await runtime.inspect({ preflight: true })).eligible, true);
   }
-  for (const value of ['https://mirror.example/', 'https://user:password@registry.npmjs.org/', 'http://registry.npmjs.org/']) {
+  for (const value of ['https://mirror.example/', 'https://registry.npmjs.org/', 'https://user:password@npm.tokensapi.ai/', 'http://npm.tokensapi.ai/']) {
     f.registry(JSON.stringify(value));
     const result = await runtime.inspect({ preflight: true });
     assert.equal(result.blockedReason, 'registry-conflict');
@@ -388,4 +390,19 @@ test('package validation rejects entry files escaping the installed package', as
   metadata.exports['./client'] = '../../../../../outside.js';
   await json(join(f.installedDir, 'package.json'), metadata);
   assert.equal((await f.runtime().inspect()).packageValid, false);
+});
+
+test('private metadata uses host package manager auth without installing or restarting', async (t) => {
+  for (const desktop of [false, true]) {
+    const f = await fixture(t, { desktop });
+    f.metadata(JSON.stringify({ name: PACKAGE_NAME, version: '3.0.9' }));
+    const result = await f.runtime().readRelease();
+    assert.equal(result.version, '3.0.9');
+    const query = f.calls.at(-1);
+    const args = desktop ? query.args : query.argv.slice(1);
+    assert.deepEqual(args, ['view', `${PACKAGE_NAME}@latest`, '--json', '--registry=https://npm.tokensapi.ai/']);
+    assert.ok(f.calls.every(c => c.method !== 'runPlugin'));
+    f.metadata('invalid json');
+    await assert.rejects(f.runtime().readRelease(), { code: 'invalid-release' });
+  }
 });

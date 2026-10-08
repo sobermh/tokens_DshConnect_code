@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import semver from 'semver';
 
 export const PACKAGE_NAME = '@tokensapi/dsh-connect';
-export const NPM_REGISTRY = 'https://registry.npmjs.org/';
+export const NPM_REGISTRY = 'https://npm.tokensapi.ai/';
 
 const INSTALL_TIMEOUT_MS = 15 * 60_000;
 const CONFIG_TIMEOUT_MS = 10_000;
@@ -335,5 +335,22 @@ export function createUpdateRuntime(options = {}) {
     );
   }
 
-  return Object.freeze({ inspect, install });
+  async function readRelease({ signal, timeoutMs = CONFIG_TIMEOUT_MS } = {}) {
+    const runtime = await environment();
+    if (runtime.blockedReason || !runtime.profileDir) throw failure('check-failed');
+    await checkRegistry(runtime, signal);
+    // The existing executor reads its normal npm configuration. Publisher
+    // credentials are never read by this plugin or returned over RPC.
+    const args = ['view', `${PACKAGE_NAME}@latest`, '--json', `--registry=${NPM_REGISTRY}`];
+    const result = await run(
+      (childSignal) => runtime.desktop
+        ? runtime.desktop.run(args, childSignal)
+        : cliOperation(runtime, args, childSignal, true),
+      { signal, timeoutMs, errorCode: 'check-failed', capture: true },
+    );
+    try { return JSON.parse(result.stdout); }
+    catch { throw failure('invalid-release'); }
+  }
+
+  return Object.freeze({ inspect, install, readRelease });
 }

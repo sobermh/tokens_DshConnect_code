@@ -18,6 +18,23 @@ export function updateError(code) {
   return Object.assign(new Error(code), { code });
 }
 
+export function validateNpmRelease(value) {
+  try {
+    const version = value.version;
+    if (value.name !== PACKAGE_NAME || typeof version !== 'string'
+      || semver.valid(version) !== version || semver.prerelease(version)) throw updateError('invalid-release');
+    const nodeRange = value.engines?.node;
+    if (nodeRange !== undefined && (typeof nodeRange !== 'string' || !semver.validRange(nodeRange))) throw updateError('invalid-release');
+    const tarball = new URL(value.dist?.tarball);
+    const integrity = value.dist?.integrity;
+    if (tarball.origin !== new URL(NPM_REGISTRY).origin || tarball.username || tarball.password
+      || tarball.search || tarball.hash
+      || tarball.pathname !== `/@tokensapi/dsh-connect/-/dsh-connect-${version}.tgz`
+      || typeof integrity !== 'string' || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(integrity)) throw updateError('invalid-release');
+    return { version, nodeRange: nodeRange ?? '*', integrity, tarball: tarball.href };
+  } catch { throw updateError('invalid-release'); }
+}
+
 /** Read only the fixed npm package; neither RPC callers nor registry metadata choose a command. */
 export async function fetchNpmRelease(fetchImpl = globalThis.fetch, timeoutMs = 10_000) {
   let response;
@@ -38,25 +55,7 @@ export async function fetchNpmRelease(fetchImpl = globalThis.fetch, timeoutMs = 
       if (length > MAX_METADATA_BYTES) throw updateError('invalid-release');
       chunks.push(Buffer.from(chunk));
     }
-    const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    const version = value.version;
-    if (value.name !== PACKAGE_NAME || typeof version !== 'string'
-      || semver.valid(version) !== version || semver.prerelease(version)) {
-      throw updateError('invalid-release');
-    }
-    const nodeRange = value.engines?.node;
-    if (nodeRange !== undefined && (typeof nodeRange !== 'string' || !semver.validRange(nodeRange))) {
-      throw updateError('invalid-release');
-    }
-    const tarball = new URL(value.dist?.tarball);
-    const integrity = value.dist?.integrity;
-    if (tarball.origin !== new URL(NPM_REGISTRY).origin || tarball.username || tarball.password
-      || tarball.search || tarball.hash
-      || tarball.pathname !== `/@tokensapi/dsh-connect/-/dsh-connect-${version}.tgz`
-      || typeof integrity !== 'string' || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(integrity)) {
-      throw updateError('invalid-release');
-    }
-    return { version, nodeRange: nodeRange ?? '*', integrity, tarball: tarball.href };
+    return validateNpmRelease(JSON.parse(Buffer.concat(chunks).toString('utf8')));
   } catch (error) {
     if (error?.code === 'invalid-release' || error instanceof SyntaxError || error instanceof TypeError && response?.ok) {
       throw updateError('invalid-release');
@@ -78,12 +77,20 @@ function pathsFor(environment) {
 }
 
 async function readJson(path, missing = null) {
-  try {
-    if ((await stat(path)).size > 10 * 1024 * 1024) throw updateError('state-unavailable');
-    return JSON.parse(await readFile(path, 'utf8'));
-  } catch (error) {
-    if (error.code === 'ENOENT') return missing;
-    throw updateError('state-unavailable');
+  for (let attempt = 0; ; attempt++) {
+    try {
+      if ((await stat(path)).size > 10 * 1024 * 1024) throw updateError('state-unavailable');
+      return JSON.parse(await readFile(path, 'utf8'));
+    } catch (error) {
+      if (error.code === 'ENOENT') return missing;
+      // A Windows reader can briefly conflict with atomic replacement/unlink.
+      // Retry only sharing failures; malformed JSON and other errors stay fatal.
+      if (process.platform === 'win32' && ['EPERM', 'EACCES', 'EBUSY'].includes(error.code) && attempt < 3) {
+        await delay(17 * (attempt + 1));
+        continue;
+      }
+      throw updateError('state-unavailable');
+    }
   }
 }
 
@@ -229,6 +236,12 @@ export function createUpdateService({
     return snapshot(environment, await readJob(environment));
   }
 
+  async function readRelease() {
+    return typeof runtime.readRelease === 'function'
+      ? validateNpmRelease(await runtime.readRelease({ timeoutMs: checkTimeoutMs }))
+      : fetchNpmRelease(fetchImpl, checkTimeoutMs);
+  }
+
   async function check() {
     assertActive();
     if (checking) return checking;
@@ -238,7 +251,7 @@ export function createUpdateService({
     checking = (async () => {
       try {
         const environment = await runtime.inspect({ preflight: true });
-        const release = await fetchNpmRelease(fetchImpl, checkTimeoutMs);
+        const release = await readRelease();
         assertActive();
         checked = {
           release,
@@ -362,7 +375,7 @@ export function createUpdateService({
         } finally {
           await lock.close();
         }
-        const currentRelease = await fetchNpmRelease(fetchImpl, checkTimeoutMs);
+        const currentRelease = await readRelease();
         if (JSON.stringify(currentRelease) !== JSON.stringify(confirmation.release)) throw updateError('check-expired');
         environment = await runtime.inspect({ preflight: true });
         if (environment.profileDir !== confirmation.profileDir || environment.installationKey !== confirmation.installationKey) {

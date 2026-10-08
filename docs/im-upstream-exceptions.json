@@ -66,20 +66,20 @@
       "sha256": "eb2f111dd6764c07820c84f04ca2e5de1ed9e64c0b2c7618fb0f5d958956c8c7"
     },
     "plugin-src/host/update-runtime.mjs": {
-      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package.",
-      "sha256": "394b5814fad42f687835e81fd7ac1f5a9cf2ac8ae4db325a44badb19b1f35f2b"
+      "reason": "Query private release metadata through the existing authenticated host package-manager executor; retain bounded cancellation, profile and registry checks.",
+      "sha256": "57d09876afa71fafc57cbd63cf015c410b3d593554ca8c8e90e70dd7b7a1bafc"
     },
     "test/update-runtime.test.mjs": {
-      "reason": "Updater targets @tokensapi/dsh-connect, not the upstream package.",
-      "sha256": "54317175a81c0ec9cb35bd61adcd762fba234c98675f53eacc95d54a52def905"
+      "reason": "Exercise private authenticated metadata lookup through desktop/CLI executors, malformed responses and conflicting scope registries.",
+      "sha256": "afa06d2aa7364d2ae4c950773bbf997c42008c75e1c94d1c9f49f449fe850e02"
     },
     "plugin-src/host/update-service.mjs": {
-      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries.",
-      "sha256": "a6be9e52c82d90bbd742824207aad57fb8253ed9786158688d43616fc6a4c901"
+      "reason": "Validate private release metadata both at check and install revalidation; preserve fork recovery journal and use bounded Windows sharing-error retries for atomic state reads/writes.",
+      "sha256": "d4e62f91e96bbf5b331008862608219a92c73cac6eb950b6d7997609798d990f"
     },
     "test/update-service.test.mjs": {
-      "reason": "Fork updater identity and separate journal; bounded Windows atomic-rename retries.",
-      "sha256": "e2d311df2464f240d236ac64180c32a922bb36d281422b8517255fd8914aa491"
+      "reason": "Exercise authenticated private metadata at check and install revalidation, reject changed releases/public origins, and retain lock/recovery coverage.",
+      "sha256": "9a47a0561f22abef7ca017dc845a3168929b457a7c544313cefae8554f185804"
     },
     "src/channels/shared/harness-approval.mjs": {
       "reason": "Preserve Telegram multi-select and approval buttons alongside upstream single-choice cards.",
@@ -120,6 +120,22 @@
     "test/client-ui.test.mjs": {
       "reason": "Test embedded upstream settings separately; retain Feishu shared-app and manual QQ UI expectations.",
       "sha256": "dbef103fd860ea1abac61c6993b07ebb9bf69c34a3a001db9f71fa345ed71335"
+    },
+    "plugin-src/client/session-channel-logos.js": {
+      "reason": "Preserve upstream logos and lifecycle; suppress inherited text shadows only on visually replaced channel titles.",
+      "sha256": "8f5be641fdc48e66c86003c17f00c83383bd7ade345527b5dfad8c6cae8e1aa6"
+    },
+    "plugin-src/client/update-panel.js": {
+      "reason": "Manual updates target @tokensapi/dsh-connect on the private registry; retain profile/version safety and latest fallback notice.",
+      "sha256": "2fc641d0f9635bb09caf1a6874858dc50202644ea9efaa779414c4c129815daa"
+    },
+    "test/browser/session-channel-logos.fixture.js": {
+      "reason": "Exercise inherited title shadows, live updates and complete typography restoration for the fork logo fix.",
+      "sha256": "5b4fe34451eec5ff979184df06118f2628b6d3970f3561967d63a9f25936094a"
+    },
+    "test/update-ui.test.mjs": {
+      "reason": "Assert fork package/private registry manual commands, safe profiles and version selection, plus the latest fallback notice.",
+      "sha256": "45c72fde1e27df48a5a612929bb5b49fdf05cae0751003c96ce91fefb706c76b"
     }
   }
 }
