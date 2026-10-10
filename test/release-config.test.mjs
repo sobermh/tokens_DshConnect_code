@@ -28,10 +28,21 @@ test('branch checks and tag publishing are separate, gated workflows', () => {
   assert.ok(release.jobs.publish.if.includes("startsWith(github.ref, 'refs/tags/v')"));
   assert.equal(checks.concurrency['cancel-in-progress'], true);
   assert.equal(release.concurrency['cancel-in-progress'], false);
+  const packageCheck = release.jobs['package-check'];
+  assert.equal(packageCheck.needs, 'publish');
+  const checker = packageCheck.uses.match(/^TokensAPI\/tokens_DshPluginCheck_code\/\.github\/workflows\/check-plugin-package\.yml@([a-f0-9]{40})$/u);
+  assert.ok(checker);
+  assert.deepEqual(packageCheck.with, { package: '${{ needs.publish.outputs.package }}', checker_ref: checker[1] });
+  assert.deepEqual(packageCheck.secrets, { PLUGIN_CHECK_REGISTRY_TOKEN: '${{ secrets.PLUGIN_CHECK_REGISTRY_TOKEN }}' });
   for (const w of [checks, release]) {
     assert.deepEqual(w.permissions, { contents: 'read' });
     assert.equal(w.concurrency.group, '${{ github.workflow }}-${{ github.ref }}');
     for (const job of Object.values(w.jobs)) {
+      if (job.uses) {
+        assert.equal(job, packageCheck);
+        assert.equal(job.steps, undefined);
+        continue;
+      }
       const checkout = job.steps.find(s => s.uses?.startsWith('actions/checkout@'));
       assert.equal(checkout.with['persist-credentials'], false);
       assert.ok(job.steps.some(s => s.run === 'npm ci --ignore-scripts --registry=https://registry.npmjs.org/'));
@@ -42,12 +53,23 @@ test('branch checks and tag publishing are separate, gated workflows', () => {
     assert.ok(w.jobs.check.steps.some(s => s.run === 'npm run check'));
     assert.ok(w.jobs.check.steps.every(s => !s.env?.NODE_AUTH_TOKEN));
   }
-  const publish = release.jobs.publish.steps.at(-1);
+  const steps = release.jobs.publish.steps;
+  const authenticated = steps.filter(s => s.env?.NODE_AUTH_TOKEN);
+  assert.equal(authenticated.length, 2);
+  const inspection = authenticated.find(s => s.env.NODE_AUTH_TOKEN === '${{ secrets.PLUGIN_CHECK_REGISTRY_TOKEN }}');
+  const publish = authenticated.find(s => s.env.NODE_AUTH_TOKEN === '${{ secrets.VERDACCIO_PUBLISH_TOKEN }}');
+  assert.ok(inspection && publish);
+  assert.ok(steps.indexOf(inspection) < steps.indexOf(publish));
+  assert.match(inspection.run, /NODE_AUTH_TOKEN:-/u);
+  assert.match(inspection.run, /npm whoami.*== market/u);
+  assert.doesNotMatch(inspection.run, /npm publish/u);
   assert.equal(publish.env.NODE_AUTH_TOKEN, '${{ secrets.VERDACCIO_PUBLISH_TOKEN }}');
   assert.ok(publish.run.indexOf('registry-release.mjs check') < publish.run.indexOf('npm publish'));
   assert.ok(publish.run.includes('npm publish .release/*.tgz --ignore-scripts --registry=https://npm.tokensapi.ai/ --tag=latest'));
   assert.ok(publish.run.includes('registry-release.mjs verify .release/*.tgz'));
   assert.ok(release.jobs.publish.steps.some(s => s.run?.includes('npm pack --ignore-scripts')));
+  assert.ok(steps.findIndex(s => s.id === 'package') > steps.indexOf(publish));
+  assert.equal(release.jobs.publish.outputs.package, '${{ steps.package.outputs.package }}');
 });
 
 test('release identity, bilingual market metadata and stable tag match', () => {
