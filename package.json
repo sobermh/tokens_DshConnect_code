@@ -68,7 +68,8 @@
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "assets",
@@ -80,7 +81,8 @@
     "docs/README.en-US.md",
     "THIRD_PARTY_NOTICES.md",
     "docs/host-compatibility.md",
-    "docs/images"
+    "docs/images",
+    "locale/*.json"
   ],
   "dsh": {
     "bundle": {

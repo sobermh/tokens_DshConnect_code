@@ -10,6 +10,8 @@ const required = [
   'cordis.patch.yml',
   'README.md',
   'docs/README.en-US.md',
+  'locale/en.json',
+  'locale/zh.json',
   'THIRD_PARTY_NOTICES.md',
   'plugin-src/client/channels/dingtalk/index.js',
   'plugin-src/client/channels/slack/index.js',
