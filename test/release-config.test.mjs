@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import test from 'node:test';
 import { parseDocument } from 'yaml';
 import semver from 'semver';
@@ -11,6 +12,18 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+
+// Without the read-only secret the preflight warns, marks the package check as skipped and lets the release go on.
+function assertSkipsWithoutSecret(script) {
+  const dir = mkdtempSync(join(tmpdir(), 'plugin-checker-'));
+  try {
+    const output = join(dir, 'output');
+    const run = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, NODE_AUTH_TOKEN: '', GITHUB_OUTPUT: output } });
+    assert.equal(run.status, 0, run.stderr);
+    assert.match(run.stdout, /::warning::.*PLUGIN_CHECK_REGISTRY_TOKEN/u);
+    assert.equal(readFileSync(output, 'utf8').trim(), 'enabled=false');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
 const workflow = name => {
   const doc = parseDocument(readFileSync(new URL(`../.github/workflows/${name}`, import.meta.url), 'utf8'));
   assert.deepEqual(doc.errors, []);
@@ -30,6 +43,8 @@ test('branch checks and tag publishing are separate, gated workflows', () => {
   assert.equal(release.concurrency['cancel-in-progress'], false);
   const packageCheck = release.jobs['package-check'];
   assert.equal(packageCheck.needs, 'publish');
+  assert.equal(packageCheck.if, "needs.publish.outputs.package-check == 'true'");
+  assert.equal(release.jobs.publish.outputs['package-check'], '${{ steps.checker.outputs.enabled }}');
   const checker = packageCheck.uses.match(/^TokensAPI\/tokens_DshPluginCheck_code\/\.github\/workflows\/check-plugin-package\.yml@([a-f0-9]{40})$/u);
   assert.ok(checker);
   assert.deepEqual(packageCheck.with, { package: '${{ needs.publish.outputs.package }}', checker_ref: checker[1] });
@@ -63,6 +78,8 @@ test('branch checks and tag publishing are separate, gated workflows', () => {
   assert.match(inspection.run, /NODE_AUTH_TOKEN:-/u);
   assert.match(inspection.run, /npm whoami.*== market/u);
   assert.doesNotMatch(inspection.run, /npm publish/u);
+  assert.equal(inspection.id, 'checker');
+  assertSkipsWithoutSecret(inspection.run);
   assert.equal(publish.env.NODE_AUTH_TOKEN, '${{ secrets.VERDACCIO_PUBLISH_TOKEN }}');
   assert.ok(publish.run.indexOf('registry-release.mjs check') < publish.run.indexOf('npm publish'));
   assert.ok(publish.run.includes('npm publish .release/*.tgz --ignore-scripts --registry=https://npm.tokensapi.ai/ --tag=latest'));
