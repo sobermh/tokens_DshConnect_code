@@ -6,6 +6,13 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.9.3] - 2026-10-12
+
+### Changed / 变更
+
+- 新增 dsh 约定的 `locale/en.json`、`locale/zh.json` 展示元数据并导出，dsh 插件页按界面语言显示「连接中心 / Connection Center」及说明，不再退回完整包名和单语描述；文案与市场 `tokenscowork` 字段一致，测试覆盖两者一致性与打包清单。
+  Add dsh `locale/en.json` and `locale/zh.json` display metadata with exports, so the dsh Plugins page shows the localized title and description instead of the full package name and a single-language description; the text matches the market `tokenscowork` metadata, with tests for consistency and packed files.
+
 ## [2.9.2] - 2026-10-08
 
 ### Changed / 变更
@@ -442,10 +449,11 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.2...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.3...HEAD
 [2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
 [2.8.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.7.0...1653fe5
 [2.7.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...v2.7.0
+[2.9.3]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.0...v2.9.1
 [2.6.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.4.4...v2.6.1
