@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,13 +9,14 @@ import { verifyTarball } from '../scripts/verify-tarball.mjs';
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 test('actual tarball validation rejects omitted entries, credentials and wrong identity', async t => {
-  for (const mode of ['valid', 'missing-client', 'missing-cli', 'credential', 'wrong-identity']) {
+  for (const mode of ['valid', 'missing-client', 'missing-cli', 'missing-locale', 'credential', 'wrong-identity']) {
     await t.test(mode, async () => {
       const root = await mkdtemp(join(tmpdir(), 'dsh-connect-pack-'));
       try {
-        const entries = ['lib/index.js', 'lib/client.js', 'bin/dsh-connect.mjs', 'cordis.patch.yml', 'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'docs/README.en-US.md', 'docs/host-compatibility.md', 'assets/logo.png', 'docs/images/imbot.png'];
+        const entries = ['lib/index.js', 'lib/client.js', 'bin/dsh-connect.mjs', 'cordis.patch.yml', 'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'docs/README.en-US.md', 'docs/host-compatibility.md', 'assets/logo.png', 'docs/images/imbot.png', 'locale/en.json', 'locale/zh.json'];
         if (mode === 'missing-client') entries.splice(entries.indexOf('lib/client.js'), 1);
         if (mode === 'missing-cli') entries.splice(entries.indexOf('bin/dsh-connect.mjs'), 1);
+        if (mode === 'missing-locale') entries.splice(entries.indexOf('locale/en.json'), 1);
         if (mode === 'credential') entries.push('assets/.npmrc');
         for (const path of entries) {
           const target = join(root, 'package', path);
@@ -28,4 +30,16 @@ test('actual tarball validation rejects omitted entries, credentials and wrong i
       } finally { await rm(root, { recursive: true, force: true }); }
     });
   }
+});
+
+// The fixture above lists files by hand; this packs the real manifest so a new file type
+// fails here instead of in the publish job.
+test('the real npm pack output passes the publish-time tarball check', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-connect-real-pack-'));
+  try {
+    const [{ filename }] = JSON.parse(execFileSync('npm', ['pack', '--json', '--ignore-scripts', '--pack-destination', root], {
+      cwd: new URL('..', import.meta.url), encoding: 'utf8', shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'ignore'],
+    }));
+    assert.equal((await verifyTarball(join(root, filename), manifest)).version, manifest.version);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
