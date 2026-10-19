@@ -25,6 +25,16 @@ import { watchHarnessMux } from './harness-mux.mjs';
 const interactionRegistries = new Map();
 const hostInteractionRegistries = new WeakMap();
 const MAX_ERROR_CLASSIFICATION_BYTES = 64;
+// Harness renamed the run_code sub-dispatch announcement in dsh 0.1.5
+// (`tool/code-dispatch-start` -> `tool/ptc-dispatch-start`, sub-call ids
+// `<parent>:code:<n>` -> `<parent>:ptc:<n>`).  Recognize both names: hosts
+// from 0.1.5 on write the new one, hosts below it and Session records written
+// before the rename still carry the old one.  `npm run check:host` compares
+// this set against the host's own event vocabulary.
+export const TOOL_DISPATCH_START_EVENT_TYPES = new Set([
+  'tool/ptc-dispatch-start',
+  'tool/code-dispatch-start',
+]);
 const IM_INPUT_ORIGIN_TTL_MS = 30 * 60 * 1000;
 const MAX_IM_INPUT_ORIGINS = 4096;
 
@@ -452,7 +462,7 @@ function consumeInteractionOwnership(ownership, entries) {
         name: event.data?.name,
         arguments: event.data?.arguments,
       };
-    } else if (event.type === 'tool/code-dispatch-start'
+    } else if (TOOL_DISPATCH_START_EVENT_TYPES.has(event.type)
       && ownership.active
       && typeof event.data?.subCallId === 'string'
       && event.data.subCallId) {

@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { TOOL_DISPATCH_START_EVENT_TYPES } from '../src/channels/shared/harness-client.mjs';
+
 if (!process.env.DSH_HOST_ROOT) throw new Error('Set DSH_HOST_ROOT to the installed host root');
 const hostRequire = createRequire(resolve(process.env.DSH_HOST_ROOT, 'package.json'));
 const load = async name => {
@@ -13,6 +15,24 @@ const load = async name => {
 };
 const tools = await load('@deepseek-ai/dsh-tools');
 const credentials = await load('@deepseek-ai/dsh-credentials');
+const session = await load('@deepseek-ai/dsh-session');
+// Harness renamed the run_code sub-dispatch announcement in dsh 0.1.5. Reading
+// a name this host never writes is silent: approvals raised inside run_code
+// just lose their tool context. Check the name against the host's own event
+// vocabulary instead of a fixture.
+const hostEventTypes = session.api.KNOWN_SESSION_EVENT_TYPES;
+let dispatchReport = 'dispatch vocabulary not published by this host';
+if (hostEventTypes !== undefined) {
+  assert.ok(hostEventTypes instanceof Set, 'KNOWN_SESSION_EVENT_TYPES must be a Set');
+  const recognized = [...TOOL_DISPATCH_START_EVENT_TYPES].filter((type) => hostEventTypes.has(type));
+  assert.ok(
+    recognized.length > 0,
+    `this host writes no run_code sub-dispatch event the client reads; host has ${
+      [...hostEventTypes].filter((type) => type.includes('dispatch')).join(', ') || 'none'
+    }, client reads ${[...TOOL_DISPATCH_START_EVENT_TYPES].join(', ')}`,
+  );
+  dispatchReport = `reads ${recognized.join(', ')}`;
+}
 assert.equal(typeof tools.api.defineTool, 'function');
 assert.equal(typeof credentials.api.credentialRef, 'function');
 assert.equal(credentials.api.credentialRef('DSH_CONNECT_CONTRACT_REF'), 'DSH_CONNECT_CONTRACT_REF');
@@ -29,4 +49,5 @@ const value = await tool.execute({ value: 'contract-ok' }, { signal: new AbortCo
 assert.equal(value, 'contract-ok');
 assert.deepEqual(tool.output.render({}, value), [{ type: 'text', text: 'contract-ok' }]);
 await assert.rejects(tool.execute({ value: 42 }, { signal: new AbortController().signal }));
-console.log(`Host API contract passed: dsh-tools ${tools.version}, dsh-credentials ${credentials.version}`);
+console.log(`Host API contract passed: dsh-tools ${tools.version}, dsh-credentials ${
+  credentials.version}, dsh-session ${session.version} (${dispatchReport})`);

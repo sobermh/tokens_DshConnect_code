@@ -11,6 +11,14 @@ import {
   HarnessClient as FeishuHarnessClient,
 } from '../../../src/channels/feishu/harness-client.mjs';
 
+// Harness renamed the run_code sub-dispatch announcement in dsh 0.1.5. The
+// client must recognize the name hosts write from 0.1.5 on and the one still
+// written by older hosts and present in Session records from before the rename.
+const DISPATCH_RENAMES = [
+  { startEvent: 'tool/ptc-dispatch-start', subCallSegment: 'ptc' },
+  { startEvent: 'tool/code-dispatch-start', subCallSegment: 'code' },
+];
+
 function deferred() {
   let resolve;
   let reject;
@@ -799,7 +807,7 @@ test('ask opens the interaction watcher before prompting and closes it with the 
   assert.equal(socket.readyState, 3);
 });
 
-test('approval interactions expose only matching tool calls from the active turn', async () => {
+for (const { startEvent } of DISPATCH_RENAMES) test(`approval interactions expose only matching tool calls from the active turn (${startEvent})`, async () => {
   let socket;
   let promptRpcId;
   let historyCalls = 0;
@@ -905,9 +913,9 @@ test('approval interactions expose only matching tool calls from the active turn
         },
       });
     }
-    emitEvent('code-dispatch-tool-frame', {
+    emitEvent('dispatch-tool-frame', {
       seq: 44,
-      type: 'tool/code-dispatch-start',
+      type: startEvent,
       data: {
         rootCallId: 'run-code-root',
         parentCallId: 'run-code-root',
@@ -961,7 +969,9 @@ test('approval interactions expose only matching tool calls from the active turn
   assert.equal(socket.readyState, 3);
 });
 
-test('reconnect history restores a Code Mode sub-call before replaying its approval', async () => {
+for (const { startEvent, subCallSegment } of DISPATCH_RENAMES) test(`reconnect history restores a run_code sub-call before replaying its approval (${startEvent})`, async () => {
+  // One Session id per rename keeps the two runs from sharing Host ownership.
+  const sessionId = `${subCallSegment}-reconnect-session`;
   const sockets = [];
   const controller = new AbortController();
   let historyEvents = [];
@@ -978,14 +988,14 @@ test('reconnect history restores a Code Mode sub-call before replaying its appro
         if (index === 1) {
           socket.frame({
             type: 'server-request',
-            rpcId: 'replayed-code-approval-rpc',
+            rpcId: `${subCallSegment}-replayed-approval-rpc`,
             method: 'approval/requested',
             payload: {
               type: 'approval/requested',
-              sessionId: 'code-reconnect-session',
-              approvalId: 'replayed-code-approval',
+              sessionId,
+              approvalId: `${subCallSegment}-replayed-approval`,
               toolName: 'bash',
-              callId: 'root-call:code:1',
+              callId: `root-call:${subCallSegment}:1`,
             },
           });
         }
@@ -1006,11 +1016,11 @@ test('reconnect history restores a Code Mode sub-call before replaying its appro
       },
       {
         seq: 3,
-        type: 'tool/code-dispatch-start',
+        type: startEvent,
         data: {
           rootCallId: 'root-call',
           parentCallId: 'root-call',
-          subCallId: 'root-call:code:1',
+          subCallId: `root-call:${subCallSegment}:1`,
           name: 'bash',
           arguments: { command: 'echo restored' },
         },
@@ -1019,21 +1029,21 @@ test('reconnect history restores a Code Mode sub-call before replaying its appro
     historyEvents = events.map((event) => ({ event }));
     sockets[0].frame({
       type: 'server-request',
-      rpcId: 'code-reconnect-start',
+      rpcId: `${subCallSegment}-reconnect-start`,
       method: 'session/event',
-      payload: { type: 'session/event', sessionId: 'code-reconnect-session', event: events[0] },
+      payload: { type: 'session/event', sessionId, event: events[0] },
     });
     sockets[0].frame({
       type: 'server-request',
-      rpcId: 'code-reconnect-user',
+      rpcId: `${subCallSegment}-reconnect-user`,
       method: 'session/event',
-      payload: { type: 'session/event', sessionId: 'code-reconnect-session', event: events[1] },
+      payload: { type: 'session/event', sessionId, event: events[1] },
     });
     sockets[0].close(1006);
     return {};
   };
 
-  const asking = client.ask('code-reconnect-session', '测试 Code Mode 重连', {
+  const asking = client.ask(sessionId, '测试 Code Mode 重连', {
     signal: controller.signal,
     onInteraction: (interaction) => { received = interaction; },
   });
@@ -1041,7 +1051,7 @@ test('reconnect history restores a Code Mode sub-call before replaying its appro
 
   assert.equal(received.recovered, false);
   assert.deepEqual(received.toolCall, {
-    callId: 'root-call:code:1',
+    callId: `root-call:${subCallSegment}:1`,
     name: 'bash',
     arguments: JSON.stringify({ command: 'echo restored' }),
   });

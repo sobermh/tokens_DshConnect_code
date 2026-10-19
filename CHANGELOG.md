@@ -6,6 +6,13 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.9.4] - 2026-10-19
+
+### Fixed / 修复
+
+- 识别 Harness 在 dsh 0.1.5 改名后的 `run_code` 子调用事件 `tool/ptc-dispatch-start`，同时继续识别改名前的 `tool/code-dispatch-start`。此前只读旧名字，0.5（dsh 0.1.5-rc.2）和 0.6（dsh 0.2.0-rc.2）上都读不到，`run_code` 内的子调用审批因此拿不到工具名和参数，审批卡片只能显示空白上下文；改名前写入的历史会话记录照常工作。
+  Recognize the `run_code` sub-dispatch event `tool/ptc-dispatch-start` that Harness renamed in dsh 0.1.5, while still recognizing the pre-rename `tool/code-dispatch-start`. Reading only the old name matched nothing on either 0.5 (dsh 0.1.5-rc.2) or 0.6 (dsh 0.2.0-rc.2), so approvals raised inside `run_code` lost their tool name and arguments and the approval card showed empty context; Session records written before the rename keep working.
+
 ## [2.9.3] - 2026-10-12
 
 ### Changed / 变更

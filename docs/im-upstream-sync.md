@@ -45,11 +45,16 @@ submission checks remain covered.
   and Telegram multi-select/approval behavior remain intentional differences.
 - Tests target the upstream composition and fork wrapper independently. CRLF
   normalization in dictionary-source checks supports Windows checkouts.
+- The shared Harness client recognizes both `tool/ptc-dispatch-start`, which
+  Harness emits from dsh 0.1.5 onward, and the pre-rename
+  `tool/code-dispatch-start`. Upstream still reads only the old name, so an
+  approval raised inside `run_code` loses its tool name and arguments on every
+  runtime this fork supports. Both names keep older Session records working.
 
 `im-upstream-exceptions.json` records reasons and normalized SHA-256 fingerprints.
 Changing a reviewed file invalidates its exception instead of silently allowing
 all future differences at that path. `im-upstream-audit.json` is the inventory:
-485 equal files, 34 reviewed differences, 62 fork-only files, no missing upstream
+483 equal files, 36 reviewed differences, 63 fork-only files, no missing upstream
 files or unreviewed differences.
 
 ## Verification and maintenance

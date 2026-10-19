@@ -136,6 +136,14 @@
     "test/update-ui.test.mjs": {
       "reason": "Assert fork package/private registry manual commands, safe profiles and version selection, plus the latest fallback notice.",
       "sha256": "45c72fde1e27df48a5a612929bb5b49fdf05cae0751003c96ce91fefb706c76b"
+    },
+    "src/channels/shared/harness-client.mjs": {
+      "reason": "Recognize the renamed run_code sub-dispatch event alongside the pre-rename name, so approvals raised inside run_code keep their tool context on dsh 0.1.5 and later.",
+      "sha256": "61d6c9d3478741c171c0822efa7f80cf39f839d19b339bb66f2fe899ed69ec71"
+    },
+    "test/channels/dingtalk/harness-client.test.mjs": {
+      "reason": "Recognize the renamed run_code sub-dispatch event alongside the pre-rename name, so approvals raised inside run_code keep their tool context on dsh 0.1.5 and later.",
+      "sha256": "cb2cef4ebc531b67add01e62a0a855e98ac955a193cc0901ef16fb2579fd9083"
     }
   }
 }

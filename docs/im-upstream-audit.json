@@ -1,11 +1,11 @@
 {
   "upstream": "34a370bfef1fcf577327b822d2091d2157ded0f8",
-  "local": "6a0cc64a8e6c207b84787ab77971193bde61e1a9",
+  "local": "8586e5530c3f293e6f6a8d8676e8370763c4330c",
   "complete": true,
   "counts": {
-    "equal": 485,
-    "reviewed-fork-difference": 34,
-    "fork-only": 62
+    "equal": 483,
+    "reviewed-fork-difference": 36,
+    "fork-only": 63
   },
   "files": [
     {
@@ -1082,7 +1082,8 @@
     },
     {
       "path": "src/channels/shared/harness-client.mjs",
-      "status": "equal"
+      "status": "reviewed-fork-difference",
+      "reason": "Recognize the renamed run_code sub-dispatch event alongside the pre-rename name, so approvals raised inside run_code keep their tool context on dsh 0.1.5 and later."
     },
     {
       "path": "src/channels/shared/harness-mux.mjs",
@@ -1589,7 +1590,8 @@
     },
     {
       "path": "test/channels/dingtalk/harness-client.test.mjs",
-      "status": "equal"
+      "status": "reviewed-fork-difference",
+      "reason": "Recognize the renamed run_code sub-dispatch event alongside the pre-rename name, so approvals raised inside run_code keep their tool context on dsh 0.1.5 and later."
     },
     {
       "path": "test/channels/dingtalk/plugin-host.test.mjs",
@@ -2134,6 +2136,10 @@
     },
     {
       "path": "test/dingtalk-personal-skills.test.mjs",
+      "status": "fork-only"
+    },
+    {
+      "path": "test/display-metadata.test.mjs",
       "status": "fork-only"
     },
     {

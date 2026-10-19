@@ -6,9 +6,7 @@ declarations allow future upgrades; they do not certify future behavior. The
 older per-release records remain historical evidence rather than an allowlist.
 Prerelease selection still follows the host's range-parser policy.
 
-For the current local desktop staging host, the installed `dsh-tools` and
-`dsh-credentials` packages are both `0.1.5-rc.2`. Run the read-only contract
-check against an explicit host root:
+Run the read-only contract check against an explicit host root:
 
 ```powershell
 $env:DSH_HOST_ROOT = 'C:\path\to\dsh-plugin-desktop'
@@ -18,6 +16,9 @@ npm run check:host
 This resolves the actual host modules, checks their runtime exports, constructs
 a tool using the same API shape as the personal connectors, exercises argument
 validation and structured output, and checks credential reference validation.
+It also compares the `run_code` sub-dispatch event names the Harness client
+reads against the host's own `KNOWN_SESSION_EVENT_TYPES`, so a renamed event
+fails here instead of silently stripping the tool context from approvals.
 It reads no user credentials and starts no bot, account authorization or update.
 The plugin must use these host modules, not install duplicate DSH packages:
 module-local service Symbols otherwise break host service lookup.
@@ -27,7 +28,12 @@ without an installed host. Missing host configuration fails explicitly rather
 than reporting a skipped integration as a success. It is only partial API
 evidence: it does not prove live tool registration, account authorization,
 attachment rendering, restart behavior or installation/upgrade compatibility.
-Full `0.1.5-rc.2` integration acceptance still awaits those checks.
+Full integration acceptance on any host version still awaits those checks.
+
+The check has been run against three locally staged hosts. `0.1.3-alpha.1`
+publishes `tool/code-dispatch-start`; `0.1.5-rc.2` (product line 0.5) and
+`0.2.0-rc.2` (product line 0.6) publish `tool/ptc-dispatch-start`. The client
+reads both names, so it keeps the tool context on all three.
 
 The browser regression runs a representative host layout in Chromium. It checks
 IM title/logo behavior, both inherited typography and cleanup, rather than
