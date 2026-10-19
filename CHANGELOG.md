@@ -456,10 +456,11 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.3...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.4...HEAD
 [2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
 [2.8.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.7.0...1653fe5
 [2.7.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...v2.7.0
+[2.9.4]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.3...v2.9.4
 [2.9.3]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.1...v2.9.2
 [2.9.1]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.0...v2.9.1
