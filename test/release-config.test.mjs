@@ -109,9 +109,17 @@ test('runtime requirements allow later upgrades instead of exact-version allowli
   assert.equal(manifest.engines.node, '>=22.19.0');
   assert.ok(semver.satisfies('26.0.0', manifest.engines.node));
   assert.ok(!semver.satisfies('22.18.0', manifest.engines.node));
-  assert.equal(manifest.dsh.compatibility.dsh, '>=0.1.2-alpha.4');
-  assert.ok(semver.satisfies('0.1.6', manifest.dsh.compatibility.dsh));
-  assert.ok(semver.satisfies('0.1.5-rc.2', manifest.dsh.compatibility.dsh, { includePrerelease: true }));
+  // The host range is a range, never the `a || b || c` allowlist upstream used:
+  // every new host patch release would otherwise need a republish. It is still
+  // bounded above, because dsh 0.2 enforces this range and an open ceiling
+  // means "every future dsh" -- see test/host-peer-range.test.mjs and
+  // docs/host-compatibility.md for why that bound has to be there.
+  const hostRange = manifest.dsh.compatibility.dsh;
+  assert.doesNotMatch(hostRange, /\|\|/);
+  assert.match(hostRange, /^>=/);
+  for (const version of ['0.1.6', '0.1.5-rc.2', '0.2.0-rc.2']) {
+    assert.ok(semver.satisfies(version, hostRange, { includePrerelease: true }), version);
+  }
   assert.deepEqual(manifest.dsh.compatibility.profiles, ['web', 'desktop']);
 });
 

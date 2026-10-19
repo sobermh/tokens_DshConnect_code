@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url';
 
 import { TOOL_DISPATCH_START_EVENT_TYPES } from '../src/channels/shared/harness-client.mjs';
 
+const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+
 if (!process.env.DSH_HOST_ROOT) throw new Error('Set DSH_HOST_ROOT to the installed host root');
 const hostRequire = createRequire(resolve(process.env.DSH_HOST_ROOT, 'package.json'));
 const load = async name => {
@@ -33,6 +35,33 @@ if (hostEventTypes !== undefined) {
   );
   dispatchReport = `reads ${recognized.join(', ')}`;
 }
+// dsh 0.2 disables a plugin whose `peerDependencies` do not admit the running
+// dsh version, and says so only on Desktop's stderr. Ask this host's own
+// evaluator rather than re-implementing its semver policy here. dsh 0.1 ships
+// no evaluator, so its absence is reported, not treated as a pass.
+let compatibilityReport = 'no compatibility evaluator on this host';
+const appBoot = await load('@deepseek-ai/dsh-app-boot').catch(() => undefined);
+if (typeof appBoot?.api?.evaluatePluginCompatibility === 'function') {
+  const { evaluatePluginCompatibility } = appBoot.api;
+  const runtimeVersion = appBoot.version;
+  const verdict = evaluatePluginCompatibility(manifest, {}, runtimeVersion);
+  assert.equal(
+    verdict,
+    undefined,
+    `this host would disable the plugin: ${JSON.stringify(verdict?.peers)} unsatisfied by dsh ${runtimeVersion}`,
+  );
+  // A passing verdict is also what a manifest with no peers at all returns, so
+  // prove the declaration is actually read: a caret floor must be refused here.
+  const caretFloor = Object.fromEntries(
+    Object.keys(manifest.peerDependencies).map((name) => [name, '^0.1.0']),
+  );
+  const refused = evaluatePluginCompatibility({ ...manifest, peerDependencies: caretFloor }, {}, runtimeVersion);
+  if (runtimeVersion.startsWith('0.2.')) {
+    assert.ok(refused?.peers, `this host accepted ^0.1.0 on dsh ${runtimeVersion}; the gate is not reading peers`);
+  }
+  compatibilityReport = `peers accepted by dsh ${runtimeVersion}${refused?.peers ? ', ^0.1.0 refused' : ''}`;
+}
+
 assert.equal(typeof tools.api.defineTool, 'function');
 assert.equal(typeof credentials.api.credentialRef, 'function');
 assert.equal(credentials.api.credentialRef('DSH_CONNECT_CONTRACT_REF'), 'DSH_CONNECT_CONTRACT_REF');
@@ -50,4 +79,4 @@ assert.equal(value, 'contract-ok');
 assert.deepEqual(tool.output.render({}, value), [{ type: 'text', text: 'contract-ok' }]);
 await assert.rejects(tool.execute({ value: 42 }, { signal: new AbortController().signal }));
 console.log(`Host API contract passed: dsh-tools ${tools.version}, dsh-credentials ${
-  credentials.version}, dsh-session ${session.version} (${dispatchReport})`);
+  credentials.version}, dsh-session ${session.version} (${dispatchReport}; ${compatibilityReport})`);

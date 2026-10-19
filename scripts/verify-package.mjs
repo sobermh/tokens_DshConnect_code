@@ -1,5 +1,6 @@
 import { access, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { assertDshDependencyPolicy } from './dsh-dependency-policy.mjs';
 import { validateRelease } from './validate-release.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -65,39 +66,9 @@ if (manifest.version !== lock.version || manifest.version !== lock.packages?.[''
   throw new Error('package manifest and lockfile versions must match');
 }
 
-// DSH runtime packages use module-local Symbol keys, so a second physical copy breaks Host lookup.
-const forbiddenDshDependency = /^@deepseek-ai\/dsh-/;
-const dependencySections = [
-  'dependencies',
-  'devDependencies',
-  'optionalDependencies',
-  'peerDependencies',
-];
-for (const section of dependencySections) {
-  for (const name of Object.keys(manifest[section] ?? {})) {
-    if (forbiddenDshDependency.test(name)) {
-      throw new Error(
-        `${name} must not be declared in ${section}; DSH runtime packages must come from the host`,
-      );
-    }
-  }
-}
-const bundledDependencies = manifest.bundleDependencies ?? manifest.bundledDependencies ?? [];
-if (Array.isArray(bundledDependencies)) {
-  for (const name of bundledDependencies) {
-    if (forbiddenDshDependency.test(name)) {
-      throw new Error(`${name} must not be bundled; DSH runtime packages must come from the host`);
-    }
-  }
-}
-const forbiddenDshLockPaths = Object.keys(lock.packages ?? {}).filter((path) => (
-  /(?:^|\/)node_modules\/@deepseek-ai\/dsh-[^/]+(?:\/|$)/.test(path)
-));
-if (forbiddenDshLockPaths.length > 0) {
-  throw new Error(
-    `package lock must not install DSH runtime packages: ${forbiddenDshLockPaths.join(', ')}`,
-  );
-}
+// Keeps a second physical copy of a DSH runtime package out of this tree; the
+// optional-peer exception and its reasoning live with the policy.
+assertDshDependencyPolicy(manifest, lock);
 
 if (!client.includes('id: "@tokensapi/dsh-connect"')) {
   throw new Error('client bundle does not register the dsh-connect loader id');

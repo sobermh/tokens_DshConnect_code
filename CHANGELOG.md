@@ -6,6 +6,13 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.9.5] - 2026-10-19
+
+### Changed / 变更
+
+- 声明宿主兼容区间 `peerDependencies`：`@deepseek-ai/dsh-tools` 与 `@deepseek-ai/dsh-credentials` 均为 `>=0.1.3-alpha.1 <0.3.0-0`，并标记为可选 peer。dsh 0.2 只按 `peerDependencies` 判断兼容、不读 `dsh.compatibility`，此前本插件没有这个字段，宿主无从判断：既不会被拦，也没有任何上下界保护，将来 dsh 出不兼容版本仍会照常加载、在运行时才失败。下界取实测验证过的最低宿主 0.1.3-alpha.1（不替未验证的 0.1.2-alpha.4 背书），上界 `<0.3.0-0` 连同预发布版一起排除下一个大版本；`dsh.compatibility.dsh` 同步为相同区间，其 `dshReleases` 逐版本记录作为历史证据保留。
+  Declare the host compatibility range in `peerDependencies`: `>=0.1.3-alpha.1 <0.3.0-0` for both `@deepseek-ai/dsh-tools` and `@deepseek-ai/dsh-credentials`, marked as optional peers. dsh 0.2 decides compatibility from `peerDependencies` alone and never reads `dsh.compatibility`, so a manifest without them declared nothing: the plugin was neither blocked nor protected, and an incompatible future dsh would still load it and fail at runtime. The floor is the lowest host actually exercised, 0.1.3-alpha.1, rather than the unverified 0.1.2-alpha.4, and the `<0.3.0-0` ceiling excludes the next major including its prereleases; `dsh.compatibility.dsh` now states the same range, while its per-release `dshReleases` records stay as historical evidence.
+
 ## [2.9.4] - 2026-10-19
 
 ### Fixed / 修复
@@ -456,10 +463,11 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.4...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.5...HEAD
 [2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
 [2.8.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.7.0...1653fe5
 [2.7.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...v2.7.0
+[2.9.5]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.4...v2.9.5
 [2.9.4]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.3...v2.9.4
 [2.9.3]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.2...v2.9.3
 [2.9.2]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.1...v2.9.2
