@@ -54,7 +54,7 @@ submission checks remain covered.
 `im-upstream-exceptions.json` records reasons and normalized SHA-256 fingerprints.
 Changing a reviewed file invalidates its exception instead of silently allowing
 all future differences at that path. `im-upstream-audit.json` is the inventory:
-483 equal files, 36 reviewed differences, 63 fork-only files, no missing upstream
+483 equal files, 36 reviewed differences, 64 fork-only files, no missing upstream
 files or unreviewed differences.
 
 ## Verification and maintenance

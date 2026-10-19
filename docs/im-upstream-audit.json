@@ -1,11 +1,11 @@
 {
   "upstream": "34a370bfef1fcf577327b822d2091d2157ded0f8",
-  "local": "8586e5530c3f293e6f6a8d8676e8370763c4330c",
+  "local": "786c3f56a15ce549ead12d64ec8817037ddb55e8",
   "complete": true,
   "counts": {
     "equal": 483,
     "reviewed-fork-difference": 36,
-    "fork-only": 63
+    "fork-only": 64
   },
   "files": [
     {
@@ -2218,6 +2218,10 @@
     {
       "path": "test/host-modern-harness-api.test.mjs",
       "status": "equal"
+    },
+    {
+      "path": "test/host-peer-range.test.mjs",
+      "status": "fork-only"
     },
     {
       "path": "test/host-session-coordinator.test.mjs",
