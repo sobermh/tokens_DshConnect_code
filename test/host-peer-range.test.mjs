@@ -22,7 +22,7 @@ const satisfies = (version, range) => semver.satisfies(version, range, { include
 
 // Hosts whose APIs this plugin was actually exercised against; see
 // docs/host-compatibility.md. The floor must not reach below these.
-const VERIFIED_HOSTS = ['0.1.3-alpha.1', '0.1.5-rc.2', '0.2.0-rc.2'];
+const VERIFIED_HOSTS = ['0.1.3-alpha.1', '0.1.5-rc.2', '0.2.0-rc.2', '0.2.1-rc.2'];
 // 0.1.2-alpha.4 is the historical `dsh.compatibility` minimum that nobody
 // verified; the next major is out of scope until someone runs the checks.
 const OUT_OF_RANGE_HOSTS = ['0.1.2-alpha.4', '0.3.0-rc.1', '0.3.0', '1.0.0'];
@@ -67,6 +67,18 @@ test('caret and tilde floors would lock this plugin out of dsh 0.2', () => {
   for (const range of ['^0.1.3-alpha.1', '~0.1.3-alpha.1', '^0.1.0']) {
     assert.ok(!satisfies('0.2.0-rc.2', range), `${range} unexpectedly accepts 0.2.0-rc.2`);
   }
+});
+
+test('the manifest declares no engines.dsh, which would silence the peer gate', () => {
+  // dsh 0.2.1 reads an own `engines.dsh` range first and then ignores the dsh
+  // peers entirely; dsh 0.2.0 ignores `engines.dsh` and reads only the peers.
+  // So declaring one here would void the range above on a 0.7 host while every
+  // other case in this file still passed. `dsh.compatibility.dsh` is a
+  // different field and is not read by either gate.
+  assert.ok(
+    !Object.hasOwn(manifest.engines ?? {}, 'dsh'),
+    'engines.dsh must stay undeclared: on dsh 0.2.1 it replaces the peer check instead of adding to it',
+  );
 });
 
 test('host peers are optional so package managers do not try to install the host', () => {

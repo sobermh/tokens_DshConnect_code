@@ -50,7 +50,15 @@ fails here instead of silently stripping the tool context from approvals.
 On hosts that publish one, it asks the host's own `evaluatePluginCompatibility`
 whether this manifest would be disabled, and checks that replacing the floor
 with `^0.1.0` is refused — a passing verdict looks identical to declaring no
-peers at all, so the refusal is what proves the declaration is read.
+peers at all, so the refusal is what proves the declaration is read. The
+verdict names its unmet map `requirements` on dsh 0.2.1 and `peers` on 0.2.0;
+the check reads whichever the host publishes and fails on a shape it does not
+recognize, because reading a field no host writes would turn the refusal above
+back into a silent pass. It also reports which rule the host follows for
+`engines.dsh`: dsh 0.2.1 reads an own `engines.dsh` range first and then
+ignores the dsh peers entirely, while 0.2.0 ignores `engines.dsh`. This
+manifest therefore declares no `engines.dsh` — one would void the peer range on
+a 0.2.1 host — and `test/host-peer-range.test.mjs` guards that without a host.
 It reads no user credentials and starts no bot, account authorization or update.
 The plugin must use these host modules, not install duplicate DSH packages:
 module-local service Symbols otherwise break host service lookup.
@@ -62,17 +70,21 @@ evidence: it does not prove live tool registration, account authorization,
 attachment rendering, restart behavior or installation/upgrade compatibility.
 Full integration acceptance on any host version still awaits those checks.
 
-The check has been run against three locally staged hosts. `0.1.3-alpha.1`
-publishes `tool/code-dispatch-start`; `0.1.5-rc.2` (product line 0.5) and
-`0.2.0-rc.2` (product line 0.6) publish `tool/ptc-dispatch-start`. The client
-reads both names, so it keeps the tool context on all three.
+The check has been run against four locally staged hosts. `0.1.3-alpha.1`
+publishes `tool/code-dispatch-start`; `0.1.5-rc.2` (product line 0.5),
+`0.2.0-rc.2` (product line 0.6) and `0.2.1-rc.2` (product line 0.7) publish
+`tool/ptc-dispatch-start`. The client reads both names, so it keeps the tool
+context on all four.
 
-The peer-range verdict has been checked on the two hosts still resolvable
-locally: `0.2.0-rc.2` accepts the declared range and refuses a `^0.1.0` floor,
-and `0.1.5-rc.2` reports no evaluator, which is the expected 0.1 behavior and
-confirms the range does not change how the 0.5 line loads the plugin. The
-`0.1.3-alpha.1` staging no longer carries its `@deepseek-ai` packages, so the
-floor rests on the earlier run against that host rather than on a fresh one.
+The peer-range verdict has been checked on the three hosts still resolvable
+locally: `0.2.1-rc.2` and `0.2.0-rc.2` each accept the declared range and
+refuse a `^0.1.0` floor, and `0.1.5-rc.2` reports no evaluator, which is the
+expected 0.1 behavior and confirms the range does not change how the 0.5 line
+loads the plugin. Asked about a `0.3.0-rc.1` runtime, the `0.2.1-rc.2`
+evaluator reports both peers unmet, so the ceiling still excludes the next
+major together with its prereleases. The `0.1.3-alpha.1` staging no
+longer carries its `@deepseek-ai` packages, so the floor rests on the earlier
+run against that host rather than on a fresh one.
 
 The browser regression runs a representative host layout in Chromium. It checks
 IM title/logo behavior, both inherited typography and cleanup, rather than

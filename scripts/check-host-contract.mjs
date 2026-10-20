@@ -44,22 +44,46 @@ const appBoot = await load('@deepseek-ai/dsh-app-boot').catch(() => undefined);
 if (typeof appBoot?.api?.evaluatePluginCompatibility === 'function') {
   const { evaluatePluginCompatibility } = appBoot.api;
   const runtimeVersion = appBoot.version;
+  // A verdict names its unmet map `requirements` on dsh 0.2.1 and `peers` on
+  // 0.2.0. Read whichever this host publishes and refuse an unrecognized
+  // shape: reading a field no host writes makes every refusal below look like
+  // an acceptance, which is how a rename passes as a clean run.
+  const unmetOf = (verdict) => {
+    if (verdict === undefined) return undefined;
+    const unmet = verdict.requirements ?? verdict.peers;
+    assert.ok(
+      unmet !== null && typeof unmet === 'object',
+      `dsh ${runtimeVersion} reports an incompatibility in neither \`requirements\` nor \`peers\`: ${
+        JSON.stringify(verdict)}`,
+    );
+    return unmet;
+  };
   const verdict = evaluatePluginCompatibility(manifest, {}, runtimeVersion);
   assert.equal(
     verdict,
     undefined,
-    `this host would disable the plugin: ${JSON.stringify(verdict?.peers)} unsatisfied by dsh ${runtimeVersion}`,
+    `this host would disable the plugin: ${JSON.stringify(unmetOf(verdict))} unsatisfied by dsh ${runtimeVersion}`,
   );
   // A passing verdict is also what a manifest with no peers at all returns, so
   // prove the declaration is actually read: a caret floor must be refused here.
   const caretFloor = Object.fromEntries(
     Object.keys(manifest.peerDependencies).map((name) => [name, '^0.1.0']),
   );
-  const refused = evaluatePluginCompatibility({ ...manifest, peerDependencies: caretFloor }, {}, runtimeVersion);
+  const refused = unmetOf(
+    evaluatePluginCompatibility({ ...manifest, peerDependencies: caretFloor }, {}, runtimeVersion),
+  );
   if (runtimeVersion.startsWith('0.2.')) {
-    assert.ok(refused?.peers, `this host accepted ^0.1.0 on dsh ${runtimeVersion}; the gate is not reading peers`);
+    assert.ok(refused, `this host accepted ^0.1.0 on dsh ${runtimeVersion}; the gate is not reading peers`);
   }
-  compatibilityReport = `peers accepted by dsh ${runtimeVersion}${refused?.peers ? ', ^0.1.0 refused' : ''}`;
+  // dsh 0.2.1 checks an own `engines.dsh` range first and then ignores the dsh
+  // peers entirely, while 0.2.0 ignores `engines.dsh`. Declaring one would
+  // silently void the peer range on a 0.2.1 host, so this manifest must not
+  // carry it -- test/host-peer-range.test.mjs guards that without a host.
+  // Report which rule this host follows instead of inferring it from a version.
+  const enginesFloor = { ...manifest, engines: { ...manifest.engines, dsh: '^0.1.0' } };
+  const enginesUnmet = unmetOf(evaluatePluginCompatibility(enginesFloor, {}, runtimeVersion));
+  compatibilityReport = `peers accepted by dsh ${runtimeVersion}${refused ? ', ^0.1.0 refused' : ''}, ${
+    enginesUnmet ? `engines.dsh decides alone (${Object.keys(enginesUnmet).join(', ')})` : 'engines.dsh ignored'}`;
 }
 
 assert.equal(typeof tools.api.defineTool, 'function');
