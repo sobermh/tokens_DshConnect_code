@@ -4,7 +4,13 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { TOOL_DISPATCH_START_EVENT_TYPES } from '../src/channels/shared/harness-client.mjs';
+import { HOST_BUS_EVENT_TYPES } from '../plugin-src/host/modern-harness-api.mjs';
+import {
+  ASSISTANT_LIVE_CHUNK_EVENT_TYPES,
+  ASSISTANT_SETTLEMENT_EVENT_TYPE,
+  TOOL_DISPATCH_START_EVENT_TYPES,
+} from '../src/channels/shared/harness-client.mjs';
+import { declaredHostBusEvents } from './host-bus-events.mjs';
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -34,6 +40,42 @@ if (hostEventTypes !== undefined) {
     }, client reads ${[...TOOL_DISPATCH_START_EVENT_TYPES].join(', ')}`,
   );
   dispatchReport = `reads ${recognized.join(', ')}`;
+}
+// The IM typewriter text is not a Session event on any host: the host
+// publishes an in-flight attempt as `agent/assistant-stream` frames and this
+// plugin's own bridge folds them into transient `assistant/chunk` entries, the
+// same fold DSH's Web client performs under the name `assistant/live-chunk`.
+// So the vocabulary decides only the durable settlement; the live names must
+// stay absent from it, or the bridge's fold would start shadowing a real event.
+let assistantReport = 'assistant vocabulary not published by this host';
+if (hostEventTypes !== undefined) {
+  assert.ok(
+    hostEventTypes.has(ASSISTANT_SETTLEMENT_EVENT_TYPE),
+    `this host writes no ${ASSISTANT_SETTLEMENT_EVENT_TYPE}, which is the client's canonical answer; it has ${
+      [...hostEventTypes].filter((type) => type.startsWith('assistant/')).join(', ') || 'no assistant event'
+    }`,
+  );
+  const durableLiveNames = [...ASSISTANT_LIVE_CHUNK_EVENT_TYPES].filter((type) => hostEventTypes.has(type));
+  assert.deepEqual(
+    durableLiveNames,
+    [],
+    `${durableLiveNames.join(', ')} became a durable Session event on this host; the bridge's transient fold now shadows it`,
+  );
+  assistantReport = `settles on ${ASSISTANT_SETTLEMENT_EVENT_TYPE}, live names client-side only`;
+}
+// Bus events get no load-time protection at all -- `ctx.on` accepts any name,
+// so a rename shows up as a feature that quietly stopped working. Compare the
+// bridge's subscriptions against the host's own declared Cordis surface.
+const declaredBusEvents = declaredHostBusEvents(process.env.DSH_HOST_ROOT);
+let busReport = 'Cordis surface not published by this host';
+if (declaredBusEvents.size > 0) {
+  const missing = HOST_BUS_EVENT_TYPES.filter((type) => !declaredBusEvents.has(type));
+  assert.deepEqual(
+    missing,
+    [],
+    `this host declares no listener for ${missing.join(', ')}; the bridge subscribes to names the host never fires`,
+  );
+  busReport = `${HOST_BUS_EVENT_TYPES.length} bus events declared`;
 }
 // dsh 0.2 disables a plugin whose `peerDependencies` do not admit the running
 // dsh version, and says so only on Desktop's stderr. Ask this host's own
@@ -103,4 +145,5 @@ assert.equal(value, 'contract-ok');
 assert.deepEqual(tool.output.render({}, value), [{ type: 'text', text: 'contract-ok' }]);
 await assert.rejects(tool.execute({ value: 42 }, { signal: new AbortController().signal }));
 console.log(`Host API contract passed: dsh-tools ${tools.version}, dsh-credentials ${
-  credentials.version}, dsh-session ${session.version} (${dispatchReport}; ${compatibilityReport})`);
+  credentials.version}, dsh-session ${session.version} (${dispatchReport}; ${
+  assistantReport}; ${busReport}; ${compatibilityReport})`);

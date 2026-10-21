@@ -47,6 +47,35 @@ validation and structured output, and checks credential reference validation.
 It also compares the `run_code` sub-dispatch event names the Harness client
 reads against the host's own `KNOWN_SESSION_EVENT_TYPES`, so a renamed event
 fails here instead of silently stripping the tool context from approvals.
+
+Two other name surfaces are checked the same way. The durable settlement event
+`assistant/message` must be in that vocabulary, because it carries the
+canonical answer the channel client reports. The live typewriter text does not:
+the host publishes one in-flight model attempt on the Cordis event
+`agent/assistant-stream`, and this plugin's own host bridge folds those frames
+into transient `assistant/chunk` entries on its `session.history` wire — the
+same fold DSH's Web client performs under the name `assistant/live-chunk`.
+Neither of those two names is a Session event on any host, so the check
+requires them to stay *absent* from the vocabulary; a host that started writing
+one durably would have its event shadowed by the bridge's transient fold. The
+client reads both names, and the bridge writes the first, since a channel
+runtime pointed at an explicit `baseUrl` may be reading from an earlier
+install.
+
+Cordis bus events get no load-time protection at all: `ctx.on` accepts any
+string, so a host-side rename costs nothing at startup and surfaces only as a
+feature that quietly stopped working — which is what the `run_code` rename did
+in dsh 0.1.5. The check therefore compares the bridge's five subscriptions
+(`session/event`, `agent/assistant-stream`, `agent/disposed`,
+`approval/request`, `user-questions/request`) against the Cordis listener
+signatures the host's own `@deepseek-ai/*` packages declare in `lib/types`,
+which is where a rename necessarily appears. `npm run check:host` then runs
+`test/host-live-chunk-contract.test.mjs`, which builds an attempt with the
+host's own `AssistantStreamAccumulator`, drives it through the bridge and the
+channel client, and asserts the deltas arrive incrementally and add up to
+exactly the text the durable `assistant/message` carries. That suite skips
+without `DSH_HOST_ROOT` rather than reporting a hand-written fixture as host
+evidence.
 On hosts that publish one, it asks the host's own `evaluatePluginCompatibility`
 whether this manifest would be disabled, and checks that replacing the floor
 with `^0.1.0` is refused — a passing verdict looks identical to declaring no
@@ -85,6 +114,13 @@ evaluator reports both peers unmet, so the ceiling still excludes the next
 major together with its prereleases. The `0.1.3-alpha.1` staging no
 longer carries its `@deepseek-ai` packages, so the floor rests on the earlier
 run against that host rather than on a fresh one.
+
+The live-delta contract has been run on the same three resolvable hosts:
+`0.1.5-rc.2`, `0.2.0-rc.2` and `0.2.1-rc.2` all declare every bus event the
+bridge subscribes to, keep `assistant/message` in their vocabulary, publish
+neither live-chunk name as a Session event, and pack a text attempt into the
+shape the bridge expands, so one attempt's deltas stream incrementally and
+settle on identical text on all three.
 
 The browser regression runs a representative host layout in Chromium. It checks
 IM title/logo behavior, both inherited typography and cleanup, rather than

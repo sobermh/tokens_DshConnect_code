@@ -4,6 +4,26 @@ import { hasActiveHarnessInteractionOwner } from '../../src/channels/shared/harn
 
 const modernApis = new WeakMap();
 
+// Cordis events this bridge subscribes to on the host.  `ctx.on` accepts any
+// string, so a host-side rename costs nothing at load time and shows up only
+// as a feature that quietly stopped working -- which is what happened to the
+// run_code dispatch names in dsh 0.1.5.  `npm run check:host` intersects this
+// list with the host's own declared Cordis surface so the next rename fails
+// loudly.  `agent/assistant-stream` is the one the live typewriter text rides
+// on; the rest keep cursors, interaction ownership, and prompts in sync.
+export const HOST_BUS_EVENT_TYPES = Object.freeze([
+  'session/event',
+  'agent/assistant-stream',
+  'agent/disposed',
+  'approval/request',
+  'user-questions/request',
+]);
+// The transient entry name this bridge writes for a live chunk.  It must be
+// one of the names `ASSISTANT_LIVE_CHUNK_EVENT_TYPES` accepts, and it stays
+// the older of the two: a channel runtime pointed at an explicit baseUrl may
+// be reading from an install that predates the second name.
+export const LIVE_CHUNK_WIRE_TYPE = 'assistant/chunk';
+
 function failureOf(error) {
   const failure = error?.failure ?? (error?.isDSHRemoteError === true ? error : undefined);
   if (failure && typeof failure === 'object'
@@ -121,7 +141,7 @@ function expandChunkRecord(record) {
     }
     return {
       event: {
-        type: 'assistant/chunk',
+        type: LIVE_CHUNK_WIRE_TYPE,
         seq: packed.seq + index,
         time,
         data: { turn: data.turn, step: data.step, chunk },
@@ -256,25 +276,34 @@ class ModernHarnessApi {
     this.respond = (message) => Promise.resolve(this.#respond(message));
 
     if (typeof ctx?.on === 'function') {
-      this.#disposers.push(ctx.on('session/event', (session, event) => {
+      // Subscribe only through the declared list, so `HOST_BUS_EVENT_TYPES`
+      // cannot fall behind what this bridge actually listens for -- that list
+      // is what `check:host` compares against the host's Cordis surface.
+      const on = (type, listener, options) => {
+        if (!HOST_BUS_EVENT_TYPES.includes(type)) {
+          throw new Error(`host bus event "${type}" is not declared in HOST_BUS_EVENT_TYPES`);
+        }
+        return ctx.on(type, listener, options);
+      };
+      this.#disposers.push(on('session/event', (session, event) => {
         const sessionId = session?.id;
         if (typeof sessionId !== 'string' || !event || typeof event !== 'object') return;
         if (Number.isSafeInteger(event.seq)) this.#rememberCursor(sessionId, event.seq);
         this.#broadcast({ type: 'session/event', sessionId, event });
       }, { global: true }));
-      this.#disposers.push(ctx.on('agent/assistant-stream', ({ agent, frame }) => {
+      this.#disposers.push(on('agent/assistant-stream', ({ agent, frame }) => {
         this.#acceptAssistantStream(agent, frame);
       }, { global: true }));
-      this.#disposers.push(ctx.on('agent/disposed', ({ agent }) => {
+      this.#disposers.push(on('agent/disposed', ({ agent }) => {
         const sessionId = agent?.session?.id;
         if (typeof sessionId === 'string') this.#assistantStreams.delete(sessionId);
       }, { global: true }));
-      this.#disposers.push(ctx.on(
+      this.#disposers.push(on(
         'approval/request',
         (request, next) => this.#requestApproval(request, next),
         { global: true, prepend: true },
       ));
-      this.#disposers.push(ctx.on(
+      this.#disposers.push(on(
         'user-questions/request',
         (request, next) => this.#requestQuestion(request, next),
         { global: true, prepend: true },
@@ -385,7 +414,7 @@ class ModernHarnessApi {
     stream.entries.push({
       type: 'transient',
       event: {
-        type: 'assistant/chunk',
+        type: LIVE_CHUNK_WIRE_TYPE,
         // Match DSH's Web client ordering: live chunks sit in the numeric gap
         // before the durable assistant/message that replaces them.
         seq: stream.startedAfterSeq + 1 - 1 / (frame.index + 2),

@@ -35,6 +35,27 @@ export const TOOL_DISPATCH_START_EVENT_TYPES = new Set([
   'tool/ptc-dispatch-start',
   'tool/code-dispatch-start',
 ]);
+// The live typewriter text is not a Session event on any host.  The host
+// publishes one in-flight model attempt on the `agent/assistant-stream` Cordis
+// event, and this plugin's own Host bridge turns those frames into transient
+// entries on its `session.history` wire -- the same fold DSH's Web client does
+// under the name `assistant/live-chunk`.  So neither name belongs to
+// `KNOWN_SESSION_EVENT_TYPES` (checked on 0.1.5-rc.2 / 0.2.0-rc.2 /
+// 0.2.1-rc.2: both absent, by design), and `check:host` must intersect the
+// Cordis surface and the durable settlement name instead.  Read both names so
+// a bridge of either vintage -- or a transport that ever hands us DSH's own
+// name -- still streams; the bridge keeps writing the first one, because a
+// channel runtime may talk to an older install over an explicit baseUrl.
+export const ASSISTANT_LIVE_CHUNK_EVENT_TYPES = new Set([
+  'assistant/chunk',
+  'assistant/live-chunk',
+]);
+// What the host does write when an attempt settles with a surface message, and
+// the canonical text the live chunks must add up to.  `assistant/attempt` is
+// deliberately not read: the host writes it only for attempts that committed
+// no surface message (failed, retried, cancelled), so its text is not
+// model-visible history.
+export const ASSISTANT_SETTLEMENT_EVENT_TYPE = 'assistant/message';
 const IM_INPUT_ORIGIN_TTL_MS = 30 * 60 * 1000;
 const MAX_IM_INPUT_ORIGINS = 4096;
 
@@ -589,7 +610,8 @@ export class HarnessReplyTracker {
       }
       if (event.data?.turn !== this.#targetTurn) continue;
 
-      if (event.type === 'assistant/chunk' && event.data?.chunk?.type === 'text-delta') {
+      if (ASSISTANT_LIVE_CHUNK_EVENT_TYPES.has(event.type)
+        && event.data?.chunk?.type === 'text-delta') {
         const step = event.data?.step ?? 0;
         const index = event.data.chunk.index ?? 0;
         this.#assistantText.appendDelta(step, index, event.data.chunk.text);
@@ -597,7 +619,7 @@ export class HarnessReplyTracker {
         continue;
       }
 
-      if (event.type === 'assistant/message') {
+      if (event.type === ASSISTANT_SETTLEMENT_EVENT_TYPE) {
         const text = assistantMessageText(event);
         const step = Number.isSafeInteger(event.data?.step) ? event.data.step : null;
         this.#assistantText.setCanonical(step, text);

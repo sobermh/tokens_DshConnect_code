@@ -6,6 +6,13 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.9.6] - 2026-10-21
+
+### Changed / 变更
+
+- 把宿主契约检查扩到流式增量这条路。IM 侧的打字机效果不走任何会话事件：宿主用 Cordis 事件 `agent/assistant-stream` 广播进行中的一次模型 attempt，本插件的宿主桥把这些 frame 折叠成瞬态历史条目，和 DSH 自己的 Web 客户端用 `assistant/live-chunk` 做的是同一件事。所以 `assistant/chunk` 和 `assistant/live-chunk` 都不在任何宿主的 `KNOWN_SESSION_EVENT_TYPES` 里（0.1.5-rc.2 / 0.2.0-rc.2 / 0.2.1-rc.2 实测都没有），这是设计如此，不是失配；真正没有保护的是 `ctx.on` 的事件名——宿主改名后监听器只是不再触发。现在 `npm run check:host` 会用宿主自己公布的 Cordis 类型面核对桥订阅的 5 个总线事件名，并核对定稿事件 `assistant/message` 在宿主词表里、两个瞬态名不在；新增用例改用宿主自己的 `AssistantStreamAccumulator` 造 frame，证明一次 attempt 的增量能逐条推送、且拼出的最终文本与定稿的 `assistant/message` 完全一致。客户端同时接受 `assistant/chunk` 和 `assistant/live-chunk`，宿主桥仍写前者（渠道运行时可能通过显式 baseUrl 连到更早的安装）。
+  Extend the host contract check to cover the live-delta path. The IM typewriter effect rides on no Session event at all: the host broadcasts one in-flight model attempt on the Cordis event `agent/assistant-stream`, and this plugin's host bridge folds those frames into transient history entries — the same fold DSH's own Web client performs under the name `assistant/live-chunk`. Neither `assistant/chunk` nor `assistant/live-chunk` is therefore in any host's `KNOWN_SESSION_EVENT_TYPES` (confirmed absent on 0.1.5-rc.2, 0.2.0-rc.2, and 0.2.1-rc.2), and that is by design rather than a mismatch; what had no protection was the `ctx.on` event names, where a host-side rename just stops firing the listener. `npm run check:host` now checks the bridge's five bus-event subscriptions against the Cordis type surface the host itself publishes, and checks that the settlement event `assistant/message` is in the host vocabulary while both transient names are not. A new suite builds its frames with the host's own `AssistantStreamAccumulator` and proves one attempt's deltas arrive incrementally and add up to exactly the text the durable `assistant/message` carries. The channel client now accepts both `assistant/chunk` and `assistant/live-chunk`; the bridge keeps writing the former, because a channel runtime pointed at an explicit baseUrl may be reading from an earlier install.
+
 ## [2.9.5] - 2026-10-19
 
 ### Changed / 变更
@@ -463,7 +470,8 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.5...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.6...HEAD
+[2.9.6]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.5...v2.9.6
 [2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
 [2.8.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.7.0...1653fe5
 [2.7.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.6.1...v2.7.0

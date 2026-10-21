@@ -1,6 +1,6 @@
 {
   "name": "@tokensapi/dsh-connect",
-  "version": "2.9.5",
+  "version": "2.9.6",
   "description": "统一管理 IM 机器人、AI Office 及飞书、钉钉个人账号授权，并接入本机 DeepSeek Harness。",
   "tokenscowork": {
     "displayName": {
@@ -122,7 +122,7 @@
     "check": "npm test && node scripts/verify-package.mjs",
     "prepack": "npm run build && node scripts/verify-package.mjs",
     "prepublishOnly": "npm test",
-    "check:host": "node scripts/check-host-contract.mjs"
+    "check:host": "node scripts/check-host-contract.mjs && node --test --test-concurrency=1 test/host-live-chunk-contract.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"

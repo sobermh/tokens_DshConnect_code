@@ -1,4 +1,8 @@
-import { AssistantTextAccumulator } from './harness-client.mjs';
+import {
+  ASSISTANT_LIVE_CHUNK_EVENT_TYPES,
+  ASSISTANT_SETTLEMENT_EVENT_TYPE,
+  AssistantTextAccumulator,
+} from './harness-client.mjs';
 
 export const MAX_DEFERRED_PER_KEY = 4;
 
@@ -48,9 +52,10 @@ export function extractCompletedTurnAnswer(entries, { turn } = {}) {
     let interrupted = false;
     for (const event of events) {
       if (event.seq > turnEnd.seq || event.data?.turn !== turnEnd.data.turn) continue;
-      if (event.type === 'assistant/chunk' && event.data?.chunk?.type === 'text-delta') {
+      if (ASSISTANT_LIVE_CHUNK_EVENT_TYPES.has(event.type)
+        && event.data?.chunk?.type === 'text-delta') {
         accumulator.appendDelta(event.data.step, event.data.chunk.index, event.data.chunk.text);
-      } else if (event.type === 'assistant/message') {
+      } else if (event.type === ASSISTANT_SETTLEMENT_EVENT_TYPE) {
         accumulator.setCanonical(event.data.step, textFromContent(event.data.message?.content));
         interrupted = event.data.interrupted === true;
       }
