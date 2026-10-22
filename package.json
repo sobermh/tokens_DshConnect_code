@@ -122,7 +122,7 @@
     "check": "npm test && node scripts/verify-package.mjs",
     "prepack": "npm run build && node scripts/verify-package.mjs",
     "prepublishOnly": "npm test",
-    "check:host": "node scripts/check-host-contract.mjs && node --test --test-concurrency=1 --test-timeout=60000 test/host-rpc-contract.test.mjs test/host-channel-contract.test.mjs test/host-live-chunk-contract.test.mjs test/host-gateway-peer-contract.test.mjs"
+    "check:host": "node scripts/check-host-contract.mjs && node --test --test-concurrency=1 --test-timeout=240000 test/host-rpc-contract.test.mjs test/host-channel-contract.test.mjs test/host-live-chunk-contract.test.mjs test/host-gateway-peer-contract.test.mjs test/host-live-contract.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"

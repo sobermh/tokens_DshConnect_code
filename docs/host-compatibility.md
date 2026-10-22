@@ -89,7 +89,7 @@ ignores the dsh peers entirely, while 0.2.0 ignores `engines.dsh`. This
 manifest therefore declares no `engines.dsh` — one would void the peer range on
 a 0.2.1 host — and `test/host-peer-range.test.mjs` guards that without a host.
 `npm run check:host` is the resident host-contract command, and it is the one to
-run on every upstream upgrade. It runs the contract script above and four
+run on every upstream upgrade. It runs the contract script above and five
 suites, all of which report every case as `NOT EXECUTED` — never as passed —
 when `DSH_HOST_ROOT` is unset, which is also what a CI run without a staged host
 reports:
@@ -100,15 +100,31 @@ reports:
 | `test/host-channel-contract.test.mjs` | `HOST-CHANNEL-01`…`11` | One inbound-message round trip per channel (weixin, wecom, wecom-app, dingtalk, feishu, telegram, qq, slack, discord, whatsapp, imessage) through that channel's own `HarnessClient` over the real gateway, asserting it reads the host's durable answer back and that the host correlated the turn by that channel's rpc-id prefix. |
 | `test/host-live-chunk-contract.test.mjs` | live-delta contract | The `agent/assistant-stream` fold, including a replaced attempt, built with the host's own `AssistantStreamAccumulator`, plus the host's declared Cordis surface and its frame-numbering rule. |
 | `test/host-gateway-peer-contract.test.mjs` | gateway Peer contract | The Peer the gateway requires, read from the host's own declarations and exercised through its real `Peer` class. |
+| `test/host-live-contract.test.mjs` | `HOST-LIVE-01`…`11` | The same endpoints again, but with **nothing scripted**: the installed host's own launcher boots a throwaway profile, and the bridge runs inside it against the real Workspace registry, the real Workspace and Session controllers, the real Connection service minting the Peer, the real remote-access policy and the real gateway. `HOST-LIVE-11` is the control. |
 
-The controller methods themselves are scripted, because the real ones need a
-Profile, a model provider and a live agent loop; the IM transports are scripted
-too, because a test run has no IM network. Everything between this plugin and
-those two edges is the installed host. So these suites catch a changed gateway
-contract, a renamed or withdrawn endpoint, a changed argument or result shape,
-and a changed assistant-stream framing — the class of break that made every
-channel fail on dsh 0.2.1 — and they do not prove model replies, persistence,
-approval behaviour or IM delivery on a live install.
+In the first four suites the controller methods themselves are scripted,
+because the real ones need a Profile, a model provider and a live agent loop;
+the IM transports are scripted too, because a test run has no IM network.
+Everything between this plugin and those two edges is the installed host. So
+those suites catch a changed gateway contract, a renamed or withdrawn endpoint,
+a changed argument or result shape, and a changed assistant-stream framing.
+
+That still left one class of break invisible, and it is the one that shipped:
+a host whose *services* refuse the call before any controller runs. dsh 0.2.1's
+gateway reads `peer.signal` in `prepareInvocation`, so every channel died on
+`workspace.list` across four product releases while the scripted suites stayed
+green. `HOST-LIVE` closes it by giving the bridge a Profile instead of a script:
+it writes a throwaway `$DSH_HOME`, composes a profile out of the installed
+host's own `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-web-app` bundles,
+inserts a probe plugin and starts the host's own `dsh` launcher on it. The
+bridge is then built on the Context `dsh-im` activates its channels in — the
+one `hostPeer` reads `connection` from — and every call runs against the live
+services. It costs one child process and a few seconds, so the suite boots once
+and all eleven cases read the same run.
+
+Together they still do not prove model replies, approval behaviour or IM
+delivery on a live install; `HOST-LIVE` does prove real Workspace and Session
+persistence, because it creates both for real.
 
 Two more host surfaces are read the same way, because neither is reachable
 through an export. The Typert gateway's request shape decides whether a caller
@@ -161,6 +177,20 @@ bridge subscribes to, keep `assistant/message` in their vocabulary, publish
 neither live-chunk name as a Session event, and pack a text attempt into the
 shape the bridge expands, so one attempt's deltas stream incrementally and
 settle on identical text on all three.
+
+`HOST-LIVE` has been run on the same three hosts: `0.1.5-rc.2`, `0.2.0-rc.2`
+and `0.2.1-rc.2` each boot, hand the bridge a real Workspace baseline and let it
+create a Workspace and a Session, 11/11 on each. Its gate effectiveness is
+measured the same way as the scripted suites: replacing only
+`plugin-src/host/modern-harness-api.mjs` with the 2.9.6 file turns 9 of the 11
+red on `0.2.1-rc.2` — every endpoint case — while the same 2.9.6 bridge stays
+11/11 on `0.2.0-rc.2`, so the suite reads the incompatibility and not the
+plugin's age. The two cases that stay green there are the ones that must:
+`HOST-LIVE-01` reads the host's surface, and `HOST-LIVE-11` is the no-Peer
+control. On `0.1.5-rc.2` the host publishes neither `connection.createPeer` nor
+`connection.operator` and asks for no Peer, so `HOST-LIVE-01` requires a Peer
+source only where the gateway declares one required; that host also sends no
+`pinnedSessionIds` in its baseline, which nothing here reads.
 
 The browser regression runs a representative host layout in Chromium. It checks
 IM title/logo behavior, both inherited typography and cleanup, rather than
