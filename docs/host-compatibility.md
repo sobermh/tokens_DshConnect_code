@@ -88,6 +88,46 @@ back into a silent pass. It also reports which rule the host follows for
 ignores the dsh peers entirely, while 0.2.0 ignores `engines.dsh`. This
 manifest therefore declares no `engines.dsh` — one would void the peer range on
 a 0.2.1 host — and `test/host-peer-range.test.mjs` guards that without a host.
+`npm run check:host` is the resident host-contract command, and it is the one to
+run on every upstream upgrade. It runs the contract script above and four
+suites, all of which report every case as `NOT EXECUTED` — never as passed —
+when `DSH_HOST_ROOT` is unset, which is also what a CI run without a staged host
+reports:
+
+| Suite | Cases | What runs for real |
+|---|---|---|
+| `test/host-rpc-contract.test.mjs` | `HOST-RPC-01`…`13` | Each of the eleven Harness endpoints this plugin calls, once, through the host's real gateway and real generated descriptors; arguments validated by the host's strict codecs, every scripted reply parsed by the descriptor's own result schema. `HOST-RPC-12` is the control: a bridge that names no Peer must fail wherever the host requires one. |
+| `test/host-channel-contract.test.mjs` | `HOST-CHANNEL-01`…`11` | One inbound-message round trip per channel (weixin, wecom, wecom-app, dingtalk, feishu, telegram, qq, slack, discord, whatsapp, imessage) through that channel's own `HarnessClient` over the real gateway, asserting it reads the host's durable answer back and that the host correlated the turn by that channel's rpc-id prefix. |
+| `test/host-live-chunk-contract.test.mjs` | live-delta contract | The `agent/assistant-stream` fold, including a replaced attempt, built with the host's own `AssistantStreamAccumulator`, plus the host's declared Cordis surface and its frame-numbering rule. |
+| `test/host-gateway-peer-contract.test.mjs` | gateway Peer contract | The Peer the gateway requires, read from the host's own declarations and exercised through its real `Peer` class. |
+
+The controller methods themselves are scripted, because the real ones need a
+Profile, a model provider and a live agent loop; the IM transports are scripted
+too, because a test run has no IM network. Everything between this plugin and
+those two edges is the installed host. So these suites catch a changed gateway
+contract, a renamed or withdrawn endpoint, a changed argument or result shape,
+and a changed assistant-stream framing — the class of break that made every
+channel fail on dsh 0.2.1 — and they do not prove model replies, persistence,
+approval behaviour or IM delivery on a live install.
+
+Two more host surfaces are read the same way, because neither is reachable
+through an export. The Typert gateway's request shape decides whether a caller
+must name a Peer: dsh 0.2.0 declares `readonly peer?: PeerScope` and substitutes
+`connection.operator` when it is absent, while dsh 0.2.1 declares it required
+and resolves no descriptor before reading `peer.signal`. A bridge that omitted
+it therefore failed *every* Harness call on dsh 0.2.1 with a TypeError reported
+as `code: 'internal'`, and the check now requires a host that demands a Peer to
+also publish the `connection.createPeer` factory the bridge builds one with.
+`test/host-gateway-peer-contract.test.mjs` drives `workspace.list` through the
+installed host's real gateway, its real generated descriptors and the real
+`Peer` class it exports, proves in reverse that omitting the Peer reproduces
+that failure, and checks the eleven endpoints the bridge calls against the
+host's own descriptors — identical on 0.2.0-rc.2 and 0.2.1-rc.2, so the Peer was
+the only incompatibility. The session history record union decides whether
+`expandChunkRecord`'s packed `chunkrow/*` arm can run at all; all three
+reproducible hosts declare `{type:'event'}` only, which is what keeps that arm
+documented as unreachable instead of deleted.
+
 It reads no user credentials and starts no bot, account authorization or update.
 The plugin must use these host modules, not install duplicate DSH packages:
 module-local service Symbols otherwise break host service lookup.
