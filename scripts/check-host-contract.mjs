@@ -11,6 +11,7 @@ import {
   TOOL_DISPATCH_START_EVENT_TYPES,
 } from '../src/channels/shared/harness-client.mjs';
 import { declaredHostBusEvents } from './host-bus-events.mjs';
+import { declaredHistoryRecordTypes } from './host-history-records.mjs';
 
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -76,6 +77,60 @@ if (declaredBusEvents.size > 0) {
     `this host declares no listener for ${missing.join(', ')}; the bridge subscribes to names the host never fires`,
   );
   busReport = `${HOST_BUS_EVENT_TYPES.length} bus events declared`;
+}
+// The bridge's `expandChunkRecord` keeps an arm for packed `chunkrow/*` history
+// records that no resolvable host produces. Read the host's own record union
+// rather than trusting a fixture: while `event` is the only discriminant the arm
+// is unreachable here, and a host that admits a packed variant again fails this
+// check instead of quietly re-entering code unexercised since 0.1.3-alpha.1.
+let recordReport = 'history record union not published by this host';
+const recordTypes = declaredHistoryRecordTypes(process.env.DSH_HOST_ROOT);
+if (recordTypes.length > 0) {
+  assert.deepEqual(
+    recordTypes,
+    ['event'],
+    `this host admits history records ${recordTypes.join(', ')}; the packed chunkrow arm of expandChunkRecord is live again and needs host evidence, not a fixture`,
+  );
+  recordReport = `history records ${recordTypes.join(', ')} only`;
+}
+// Every Harness call this bridge makes carries a Peer, because dsh 0.2.1 made
+// `InvokeRemoteRequest.peer` required and dropped the gateway's own operator
+// fallback: without one, `prepareInvocation` reads `peer.signal` and every call
+// dies before its descriptor is resolved. The bridge takes that Peer from the
+// connection service's `createPeer`, so a host that requires a Peer must still
+// publish that factory -- the two moved together in 0.2.1 and must keep moving
+// together. `test/host-gateway-peer-contract.test.mjs` drives the real gateway;
+// this is the declaration half, on the host the plugin is actually installed on.
+const gatewayTypes = await readFile(
+  resolve(hostRequire.resolve('@deepseek-ai/dsh-api-gateway/package.json'), '../lib/types/types.d.ts'),
+  'utf8',
+).catch(() => undefined);
+let peerReport = 'gateway request type not published by this host';
+if (gatewayTypes !== undefined) {
+  assert.match(
+    gatewayTypes,
+    /interface InvokeRemoteRequest/u,
+    'this host publishes no gateway request type; the Peer scan has lost its anchor',
+  );
+  const declaration = /readonly peer(\??):\s*PeerScope/u.exec(gatewayTypes);
+  const requiresPeer = declaration !== null && declaration[1] === '';
+  if (requiresPeer) {
+    const connectionTypes = await readFile(
+      resolve(
+        hostRequire.resolve('@deepseek-ai/dsh-client-connection/package.json'),
+        '../lib/types/rpc-host.d.ts',
+      ),
+      'utf8',
+    ).catch(() => '');
+    assert.match(
+      connectionTypes,
+      /createPeer\(options:/u,
+      'this host requires every caller to name a Peer but publishes no connection.createPeer factory to build one with; the bridge would fail every Harness call',
+    );
+  }
+  peerReport = requiresPeer
+    ? 'gateway requires a Peer, connection.createPeer available'
+    : `gateway accepts a call with no Peer (${declaration === null ? 'no peer field' : 'optional'})`;
 }
 // dsh 0.2 disables a plugin whose `peerDependencies` do not admit the running
 // dsh version, and says so only on Desktop's stderr. Ask this host's own
@@ -146,4 +201,4 @@ assert.deepEqual(tool.output.render({}, value), [{ type: 'text', text: 'contract
 await assert.rejects(tool.execute({ value: 42 }, { signal: new AbortController().signal }));
 console.log(`Host API contract passed: dsh-tools ${tools.version}, dsh-credentials ${
   credentials.version}, dsh-session ${session.version} (${dispatchReport}; ${
-  assistantReport}; ${busReport}; ${compatibilityReport})`);
+  assistantReport}; ${busReport}; ${recordReport}; ${peerReport}; ${compatibilityReport})`);

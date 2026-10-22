@@ -174,7 +174,10 @@ test('the host packs live chunks into the shape the bridge reads', { skip }, asy
     fixture.emit('agent/assistant-stream', {
       agent,
       frame: {
-        type: 'chunk', attemptId: 'session:1', revision: 1,
+        // The host allocates one revision per emitted frame from a counter the
+        // attached agent owns, so an attempt's frames run start, chunk 0,
+        // chunk 1, ... -- see the revision-contract case below.
+        type: 'chunk', attemptId: 'session:1', revision: index + 2,
         index, time: member.time, chunk: member.chunk,
       },
     });
@@ -211,7 +214,7 @@ test('the host packs live chunks into the shape the bridge reads', { skip }, asy
   fixture.emit('agent/assistant-stream', {
     agent,
     frame: {
-      type: 'end', attemptId: 'session:1', revision: 1, index: timed.length,
+      type: 'end', attemptId: 'session:1', revision: timed.length + 2, index: timed.length,
       outcome: { kind: 'committed', eventType: ASSISTANT_SETTLEMENT_EVENT_TYPE, seq: 2 },
     },
   });
@@ -259,6 +262,187 @@ test('a live chunk under DSH\'s own name streams the same way', { skip }, async 
     'the batch must collapse to the full accumulated text',
   );
   assert.equal(tracker.answer, expected);
+});
+
+test('the host still numbers assistant frames the way the bridge pairs them', { skip }, async () => {
+  // The bridge pairs a chunk to its attempt by `(attemptId, revision, index)`,
+  // which only works because of two host facts: `revision` is allocated once
+  // per emitted frame from a counter the attached agent owns (so one attempt's
+  // frames are consecutive), and a replacement agent restarts both that counter
+  // and the attempt counter (so the attempt id alone cannot identify the live
+  // attempt).  Neither fact is reachable through an export -- the attempt class
+  // is internal -- so read them from the host's own published contract and its
+  // shipped loop, where a change necessarily appears.  A failure here means the
+  // numbering moved and `#acceptAssistantStream` has to be re-derived, not that
+  // this case needs relaxing.
+  const hostRequire = createRequire(resolve(hostRoot, 'package.json'));
+  const declared = readFileSync(
+    resolve(
+      hostRequire.resolve('@deepseek-ai/dsh-agent/package.json'),
+      '../lib/types/runtime-types.d.ts',
+    ),
+    'utf8',
+  );
+  assert.match(
+    declared,
+    /replacement restarts at 1/u,
+    'this host no longer documents the revision restart the bridge keys its restarts on',
+  );
+  const loop = readFileSync(
+    resolve(hostRequire.resolve('@deepseek-ai/dsh-agent-loop/package.json'), '../lib/index.js'),
+    'utf8',
+  );
+  assert.equal(
+    loop.match(/revision: this\.nextRevision\(\)/gu)?.length,
+    4,
+    'the loop no longer allocates exactly one revision per emitted frame (start, chunk, settle, abandon)',
+  );
+  assert.match(
+    loop,
+    /\(\) => \+\+this\.assistantStreamRevision/u,
+    'the revision counter is no longer a per-agent field the attempt increments',
+  );
+  assert.match(
+    loop,
+    /\+\+this\.assistantAttemptCounter/u,
+    'the attempt counter is no longer per-agent, so attempt ids may no longer repeat',
+  );
+});
+
+test('a replaced attempt keeps the typewriter moving', { skip }, async () => {
+  // An agent replaced mid-attempt -- clear, compact or resume -- restarts both
+  // the attempt counter and the frame revision, so the replacement publishes
+  // the attempt id `session:1` and revision 1 a second time while the lifecycle
+  // it replaced can still deliver its terminal frame under that shared id.
+  // Both attempts are built by the host's own accumulator, so the frames carry
+  // the payload the host would really send.
+  const llm = await loadFromHost('@deepseek-ai/dsh-llm/assistant-stream');
+  const { AssistantStreamAccumulator, expandAssistantStream, joinAssistantStreamText } = llm.api;
+  const attempt = (texts, from) => {
+    const accumulator = new AssistantStreamAccumulator();
+    let time = from;
+    for (const text of texts) {
+      accumulator.push({ time: (time += 7), chunk: { type: 'text-delta', index: 0, text } });
+    }
+    const stream = accumulator.snapshot();
+    return { members: expandAssistantStream(stream), stream, text: joinAssistantStreamText(stream) };
+  };
+  const abandoned = attempt(['稍等', '，我查一下'], 1_000);
+  const replacement = attempt(['查到了', '：订单 ', 'A-42 已发货'], 2_000);
+
+  const records = [
+    { type: 'event', event: { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } } },
+    {
+      type: 'event',
+      event: {
+        type: 'user/message', seq: 1, time: 1,
+        data: { turn: 1, source: { kind: 'user', rpcId: PROMPT_RPC_ID }, message: { content: [] } },
+      },
+    },
+  ];
+  const gateway = {
+    async invoke() { return { records, hasMore: false }; },
+    async stream() {
+      return asyncValues({
+        type: 'snapshot', cursor: 1, records, hasMore: false,
+        projections: { asOfSeq: 1, values: {} },
+      });
+    },
+  };
+  const fixture = fakeContext(gateway);
+  const api = modernHarnessApi(fixture.ctx);
+  const tracker = new HarnessReplyTracker({ promptRpcId: PROMPT_RPC_ID });
+  const agent = { session: { id: SESSION_ID, seq: 2 } };
+  const publish = (frame) => fixture.emit('agent/assistant-stream', { agent, frame });
+  const poll = async (rpcId) => {
+    const page = await api.sessions.history({ rpcId, payload: { sessionId: SESSION_ID } });
+    const live = page.result.value.events.filter(
+      ({ event }) => ASSISTANT_LIVE_CHUNK_EVENT_TYPES.has(event.type),
+    );
+    const updates = tracker.consumeAll(page.result.value.events);
+    return { live, text: updates.filter((update) => update.type === 'text').at(-1)?.text };
+  };
+
+  const baseline = await api.sessions.history({ rpcId: 'baseline', payload: { sessionId: SESSION_ID } });
+  tracker.consumeAll(baseline.result.value.events);
+  assert.equal(tracker.turn, 1);
+
+  // The attempt that gets replaced: its visible prefix is what the user has
+  // already read, and the typewriter must never go backwards from it.
+  const seen = [];
+  publish({ type: 'start', attemptId: 'session:1', revision: 1, turn: 1, step: 0 });
+  for (const [index, member] of abandoned.members.entries()) {
+    publish({
+      type: 'chunk', attemptId: 'session:1', revision: index + 2,
+      index, time: member.time, chunk: member.chunk,
+    });
+    const { live, text } = await poll(`abandoned-${index}`);
+    assert.equal(live.length, index + 1);
+    if (text !== undefined) seen.push(text);
+  }
+
+  // The replacement opens its attempt, and only then does the lifecycle it
+  // replaced report the abandonment of the attempt id they share.
+  publish({ type: 'start', attemptId: 'session:1', revision: 1, turn: 1, step: 0 });
+  publish({
+    type: 'end', attemptId: 'session:1', revision: abandoned.members.length + 2,
+    index: abandoned.members.length, outcome: { kind: 'abandoned' },
+  });
+  const restarted = await poll('restarted');
+  assert.deepEqual(restarted.live, [], 'the restart must clear the replaced attempt\'s entries');
+
+  for (const [index, member] of replacement.members.entries()) {
+    publish({
+      type: 'chunk', attemptId: 'session:1', revision: index + 2,
+      index, time: member.time, chunk: member.chunk,
+    });
+    const { live, text } = await poll(`replacement-${index}`);
+    assert.equal(
+      live.length,
+      index + 1,
+      'every chunk the replacement publishes must stay visible until it settles',
+    );
+    if (text !== undefined) seen.push(text);
+  }
+  assert.ok(
+    seen.length > abandoned.members.length,
+    `the replacement published nothing the client could read: ${JSON.stringify(seen)}`,
+  );
+  for (const [index, text] of seen.entries()) {
+    if (index === 0) continue;
+    assert.ok(text.startsWith(seen[index - 1]), `${JSON.stringify(text)} is not a continuation`);
+    assert.ok(text.length > seen[index - 1].length, 'each poll must add text');
+  }
+
+  // Settlement commits the replacement's stream as the durable message, which
+  // is the text that must stand once the transient entries go away.
+  records.push({
+    type: 'event',
+    event: {
+      type: ASSISTANT_SETTLEMENT_EVENT_TYPE, seq: 2, time: 3_000,
+      data: {
+        turn: 1, step: 0, stream: replacement.stream,
+        message: { content: [{ type: 'text', text: replacement.text }] },
+      },
+    },
+  });
+  publish({
+    type: 'end', attemptId: 'session:1', revision: replacement.members.length + 2,
+    index: replacement.members.length,
+    outcome: { kind: 'committed', eventType: ASSISTANT_SETTLEMENT_EVENT_TYPE, seq: 2 },
+  });
+  records.push({
+    type: 'event',
+    event: { type: 'turn/end', seq: 3, time: 3_001, data: { turn: 1, reason: 'completed' } },
+  });
+  const settled = await poll('settled');
+  assert.deepEqual(settled.live, [], 'the bridge must drop its transient entries once the attempt settles');
+  assert.equal(
+    tracker.answer,
+    replacement.text,
+    'the durable message of the attempt that actually settled must be the final answer',
+  );
+  assert.equal(tracker.finished, true);
 });
 
 test('the declared Cordis surface matches the host\'s own type surface', { skip }, async () => {

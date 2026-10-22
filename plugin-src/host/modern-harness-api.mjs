@@ -56,13 +56,49 @@ function rpcResult(request, operation) {
   );
 }
 
-function remoteRequest(namespace, method, args, signal) {
+function remoteRequest(namespace, method, args, signal, peer) {
   return {
     namespace,
     method,
     args,
     ...(signal === undefined ? {} : { signal }),
+    ...(peer === undefined ? {} : { peer }),
   };
+}
+
+// The Peer every gateway call from this bridge speaks for.
+//
+// dsh 0.2.1 made `InvokeRemoteRequest.peer` required -- "every carrier and
+// in-process caller names it explicitly" -- and dropped the gateway's own
+// `operatorPeer()` fallback, so `prepareInvocation` now reads `peer.signal`
+// before it resolves a descriptor.  A request without one dies there with a
+// TypeError, which this bridge reports as `code: 'internal'`: on dsh 0.2.1
+// every host/workspace/session/llm call failed that way, and the channel
+// runtimes surfaced it as the first call of an inbound message,
+// `workspace.list`, failing with INTERNAL_UNKNOWN.  dsh 0.2.0 accepted a
+// request with no peer and substituted `connection.operator`, so the peer is
+// taken from whatever the installed host offers rather than from a version
+// test: 0.2.1's `connection.createPeer`, else 0.2.0's `connection.operator`,
+// else nothing, which is what the older gateway expects anyway.
+//
+// The principal is `owner`: this bridge is in-process Host code acting for the
+// local user, which is exactly what `operatorPeer()` stood for, and a non-owner
+// principal would put every call through `remoteAccess.decide`.  It asks for no
+// interactions, because the bridge receives approvals and questions through
+// `ctx.on` and never opens a forwarded-event stream.
+function hostPeer(ctx) {
+  const connection = ctx?.connection
+    ?? (typeof ctx?.get === 'function' ? ctx.get('connection') : undefined);
+  if (typeof connection?.createPeer === 'function') {
+    return {
+      peer: connection.createPeer({ principal: { kind: 'owner' }, interactions: 'none' }),
+      owned: true,
+    };
+  }
+  const operator = connection?.operator;
+  return operator !== null && typeof operator === 'object'
+    ? { peer: operator, owned: false }
+    : { peer: undefined, owned: false };
 }
 
 function questionError(message, code) {
@@ -104,6 +140,20 @@ function matchesQuestions(value, pending) {
   });
 }
 
+// One history record from `session.follow` / `session.page`.
+//
+// Every host still resolvable here -- 0.1.5-rc.2, 0.2.0-rc.2, 0.2.1-rc.2 --
+// declares `SessionHistoryRecord = SessionEventEntry`, so only the
+// `{ type: 'event' }` arm below runs on them and the packed `chunkrow/*` arm is
+// unreachable: the string `chunkrow` does not occur anywhere in those installs.
+// It is kept rather than deleted because the declared floor, 0.1.3-alpha.1, can
+// no longer be staged locally to prove that it packs nothing either, and
+// deleting the arm would turn "we cannot check that host" into a history parse
+// that throws on it.  Raising the floor instead would buy nothing: dsh 0.1
+// ships no compatibility evaluator, so the peer range is not enforced there at
+// all.  `check:host` reads the host's own record union and fails once a host
+// admits a packed variant again -- that is when this arm stops being dead and
+// has to be re-verified instead of just kept.
 function expandChunkRecord(record) {
   if (record?.type === 'event' && record.event && typeof record.event === 'object') {
     return [{ event: record.event }];
@@ -216,6 +266,8 @@ class MuxSubscription {
 class ModernHarnessApi {
   #gateway;
   #scope;
+  #peer;
+  #ownsPeer;
   #mux = new Set();
   #pendingQuestions = new Map();
   #pendingApprovals = new Map();
@@ -227,6 +279,9 @@ class ModernHarnessApi {
   constructor(ctx, gateway, scope) {
     this.#gateway = gateway;
     this.#scope = scope;
+    const { peer, owned } = hostPeer(ctx);
+    this.#peer = peer;
+    this.#ownsPeer = owned;
 
     this.host = Object.freeze({
       describe: (request) => rpcResult(request, () => ({ ready: true, transport: 'typert' })),
@@ -312,7 +367,7 @@ class ModernHarnessApi {
   }
 
   async #invoke(namespace, method, args, signal) {
-    return this.#gateway.invoke(remoteRequest(namespace, method, args, signal));
+    return this.#gateway.invoke(remoteRequest(namespace, method, args, signal, this.#peer));
   }
 
   async #streamFirst(namespace, method, args, signal) {
@@ -323,7 +378,7 @@ class ModernHarnessApi {
     let iterator;
     try {
       const source = await this.#gateway.stream(remoteRequest(
-        namespace, method, args, streamSignal,
+        namespace, method, args, streamSignal, this.#peer,
       ));
       iterator = source[Symbol.asyncIterator]();
       const first = await iterator.next();
@@ -387,45 +442,99 @@ class ModernHarnessApi {
     };
   }
 
+  // Fold one `agent/assistant-stream` frame into the transient entries this
+  // bridge appends to `session.history`.
+  //
+  // The attempt id alone cannot identify the live attempt.  It is
+  // `<sessionId>:<counter>` with a counter owned by the *attached agent*
+  // (dsh-agent-loop `ReactLoopAgent`), so a replacement agent for the same
+  // Session -- clear, compact or resume -- hands out `<sessionId>:1` a second
+  // time and restarts `revision` at 1 with it, while the lifecycle it replaced
+  // can still deliver its own terminal frame under that shared id.  Pairing on
+  // the attempt id and `index` alone let that terminal frame close the *new*
+  // attempt: its entries were dropped, every later chunk then failed the
+  // `index === entries.length` pairing, and the typewriter stopped at the
+  // replacement point while the durable `assistant/message` still carried the
+  // final text.
+  //
+  // `revision` closes that gap.  The host allocates it per emitted frame from
+  // one counter shared by nothing else, and attempts never overlap inside an
+  // agent, so one attempt's frames are consecutive: start, chunk 0, chunk 1,
+  // ..., end (identical in 0.1.5-rc.2, 0.2.0-rc.2 and 0.2.1-rc.2).  The pairing
+  // is therefore `(attemptId, revision, index)`, with `revision` counted from
+  // the attempt's own `start`: a frame that does not continue *this* attempt is
+  // from another lifecycle and is ignored, and a `start` is the announced
+  // restart that clears the previous lifecycle's transient entries.
+  //
+  // The host's own `SessionAssistantStreamAccumulator` instead tracks one
+  // revision per Session and drops the live attempt whenever a frame does not
+  // continue it, because it publishes that revision as a reconnect baseline to
+  // Web followers and must not hand out state it cannot number.  This bridge
+  // publishes no baseline -- a channel runtime just polls -- so keeping the
+  // live attempt is the better trade: a stale frame cannot stall a typewriter
+  // whose own frames are arriving in order.
   #acceptAssistantStream(agent, frame) {
     const sessionId = agent?.session?.id;
     if (typeof sessionId !== 'string' || !frame || typeof frame !== 'object') return;
+    // Without a readable revision a frame cannot be paired to an attempt at all.
+    if (!Number.isSafeInteger(frame.revision)) return;
+    let stream = this.#assistantStreams.get(sessionId);
+    if (stream === undefined) {
+      stream = { attempt: undefined, baseSeq: undefined, published: 0 };
+      this.#assistantStreams.set(sessionId, stream);
+    }
     if (frame.type === 'start') {
       const nextSeq = agent?.session?.seq;
       const startedAfterSeq = Number.isSafeInteger(nextSeq) && nextSeq >= 0
         ? nextSeq - 1
         : this.#sessionCursors.get(sessionId) ?? -1;
-      this.#assistantStreams.set(sessionId, {
+      // Transient entries are numbered per session, not per attempt: a channel
+      // runtime polls `session.history` and drops anything at or below the seq
+      // it already consumed, so a second attempt opening in the same numeric
+      // gap -- a replacement that committed no durable event in between --
+      // would restate seqs the runtime has seen and go invisible, which is the
+      // typewriter stopping even though the entries are published.  The
+      // ordinal only restarts once a durable event has moved the gap.
+      if (stream.baseSeq !== startedAfterSeq) {
+        stream.baseSeq = startedAfterSeq;
+        stream.published = 0;
+      }
+      stream.attempt = {
         attemptId: frame.attemptId,
+        revision: frame.revision,
         turn: frame.turn,
         step: frame.step,
         startedAfterSeq,
         entries: [],
-      });
+      };
       return;
     }
-    const stream = this.#assistantStreams.get(sessionId);
-    if (!stream || stream.attemptId !== frame.attemptId) return;
+    const attempt = stream.attempt;
+    if (attempt === undefined
+      || attempt.attemptId !== frame.attemptId
+      || frame.revision !== attempt.revision + 1) return;
     if (frame.type === 'end') {
-      this.#assistantStreams.delete(sessionId);
+      stream.attempt = undefined;
       return;
     }
-    if (frame.type !== 'chunk' || frame.index !== stream.entries.length) return;
-    stream.entries.push({
+    if (frame.type !== 'chunk' || frame.index !== attempt.entries.length) return;
+    attempt.revision = frame.revision;
+    const ordinal = stream.published++;
+    attempt.entries.push({
       type: 'transient',
       event: {
         type: LIVE_CHUNK_WIRE_TYPE,
         // Match DSH's Web client ordering: live chunks sit in the numeric gap
         // before the durable assistant/message that replaces them.
-        seq: stream.startedAfterSeq + 1 - 1 / (frame.index + 2),
+        seq: attempt.startedAfterSeq + 1 - 1 / (ordinal + 2),
         time: frame.time,
-        data: { turn: stream.turn, step: stream.step, chunk: frame.chunk },
+        data: { turn: attempt.turn, step: attempt.step, chunk: frame.chunk },
       },
     });
   }
 
   #withAssistantStream(sessionId, entries) {
-    const transient = this.#assistantStreams.get(sessionId)?.entries ?? [];
+    const transient = this.#assistantStreams.get(sessionId)?.attempt?.entries ?? [];
     return transient.length === 0 ? entries : [...entries, ...transient];
   }
 
@@ -735,6 +844,18 @@ class ModernHarnessApi {
       questionError('dsh-im interaction adapter was disposed', 'ASK_ABORTED'),
     );
     for (const dispose of this.#disposers.splice(0).reverse()) dispose?.();
+    // A Peer this bridge created is its own to release; one borrowed from the
+    // host (0.2.0's `connection.operator`) belongs to the connection layer and
+    // must outlive us.  `createPeer` hangs the scope under this plugin's own
+    // Context, so unload would release it anyway -- this just does not wait for
+    // that, and racing calls share one completion.
+    const peer = this.#peer;
+    const owned = this.#ownsPeer;
+    this.#peer = undefined;
+    this.#ownsPeer = false;
+    if (owned && typeof peer?.dispose === 'function') {
+      Promise.resolve(peer.dispose()).catch(() => undefined);
+    }
   }
 }
 

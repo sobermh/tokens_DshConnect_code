@@ -350,6 +350,104 @@ test('modern adapter exposes DSH v2 live assistant chunks through legacy history
   ), false);
 });
 
+test('modern adapter keeps streaming when a replaced lifecycle reuses the attempt id', async () => {
+  // A replacement agent for the same Session -- clear, compact or resume --
+  // restarts both the attempt counter and the frame revision, so it publishes
+  // `session:1` revision 1 a second time, and the lifecycle it replaced can
+  // still deliver its own terminal frame under that same attempt id.
+  const records = [
+    { type: 'event', event: { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } } },
+    {
+      type: 'event',
+      event: {
+        type: 'user/message', seq: 1, time: 1,
+        data: { turn: 1, source: { kind: 'user', rpcId: 'prompt' }, message: { content: [] } },
+      },
+    },
+  ];
+  const gateway = {
+    async invoke() { return { records, hasMore: false }; },
+    async stream() {
+      return asyncValues({
+        type: 'snapshot', cursor: 1, records, hasMore: false,
+        projections: { asOfSeq: 1, values: {} },
+      });
+    },
+  };
+  const fixture = fakeContext(gateway);
+  const api = modernHarnessApi(fixture.ctx);
+  const agent = { session: { id: 'session', seq: 2 } };
+  const frame = (value) => fixture.emit('agent/assistant-stream', { agent, frame: value });
+  const liveChunks = async (rpcId) => {
+    const page = await api.sessions.history({ rpcId, payload: { sessionId: 'session' } });
+    return page.result.value.events.filter(({ event }) => event.type === 'assistant/chunk');
+  };
+
+  await api.sessions.history({ rpcId: 'baseline', payload: { sessionId: 'session' } });
+  frame({ type: 'start', attemptId: 'session:1', revision: 1, turn: 1, step: 0 });
+  frame({
+    type: 'chunk', attemptId: 'session:1', revision: 2, index: 0, time: 2,
+    chunk: { type: 'text-delta', index: 0, text: '稍等' },
+  });
+  const abandonedChunks = await liveChunks('abandoned');
+  assert.deepEqual(abandonedChunks.map(({ event }) => event.data.chunk.text), ['稍等']);
+
+  // The replacement opens its attempt, and only then does the lifecycle it
+  // replaced report the abandonment of the attempt id they share.
+  frame({ type: 'start', attemptId: 'session:1', revision: 1, turn: 1, step: 0 });
+  frame({
+    type: 'end', attemptId: 'session:1', revision: 3, index: 1,
+    outcome: { kind: 'abandoned' },
+  });
+  assert.deepEqual(await liveChunks('replaced'), [], 'the restart must clear the replaced entries');
+
+  frame({
+    type: 'chunk', attemptId: 'session:1', revision: 2, index: 0, time: 4,
+    chunk: { type: 'text-delta', index: 0, text: '查到了' },
+  });
+  frame({
+    type: 'chunk', attemptId: 'session:1', revision: 3, index: 1, time: 5,
+    chunk: { type: 'text-delta', index: 0, text: '：已发货' },
+  });
+  const replacement = await liveChunks('replacement');
+  assert.deepEqual(
+    replacement.map(({ event }) => event.data.chunk.text),
+    ['查到了', '：已发货'],
+    'the replacement attempt must keep publishing after the previous lifecycle ended',
+  );
+  // A channel runtime drops anything at or below the seq it already consumed,
+  // so the replacement must not restate the seq the abandoned chunk used.
+  assert.ok(
+    replacement[0].event.seq > abandonedChunks[0].event.seq,
+    'the replacement must not reuse an already-consumed seq',
+  );
+  assert.ok(replacement.every(({ event }) => event.seq > 1 && event.seq < 2));
+
+  // A frame that does not continue this attempt's revisions belongs to another
+  // lifecycle: folding it in would misorder the text, so it is ignored without
+  // disturbing the attempt that is streaming in order.
+  frame({
+    type: 'chunk', attemptId: 'session:1', revision: 9, index: 2, time: 6,
+    chunk: { type: 'text-delta', index: 0, text: '不该出现' },
+  });
+  frame({
+    type: 'end', attemptId: 'session:1', revision: 9, index: 2,
+    outcome: { kind: 'abandoned' },
+  });
+  assert.deepEqual(
+    (await liveChunks('gap')).map(({ event }) => event.data.chunk.text),
+    ['查到了', '：已发货'],
+    'a frame off the attempt\'s revision sequence must neither fold in nor close the attempt',
+  );
+
+  // The attempt's own terminal frame still settles it.
+  frame({
+    type: 'end', attemptId: 'session:1', revision: 4, index: 2,
+    outcome: { kind: 'committed', eventType: 'assistant/message', seq: 2 },
+  });
+  assert.deepEqual(await liveChunks('settled'), [], 'the attempt\'s own end must drop the entries');
+});
+
 forEachSessionApi('an approval', async (sessionApi) => {
   const { events, session } = sessionFixture(sessionApi);
   const eventRecord = (event) => ({ type: 'event', event });
