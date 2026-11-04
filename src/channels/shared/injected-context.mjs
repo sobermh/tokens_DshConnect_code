@@ -252,16 +252,19 @@ export function splitLeadingInjectedContext(text, options = {}) {
 }
 
 /**
- * Build the plugin-sourced context message for one parsed block.
+ * Build the context message for one parsed block, attributed to this producer.
  * @param block - one parsed block.
  * @param newId - identity factory for the new message.
- * @param plugin - source plugin name recorded on it.
+ * @param plugin - producer name, used as the message source kind.
  * @returns one identified user-role context message.
  */
 function contextMessage(block, newId, plugin) {
+  // DSH 0.2 (session format v4) refuses the retired `{ kind: 'plugin', plugin }`
+  // wrapper and fails the whole append, which wedges the IM session. The producer
+  // owns its kind, the way upstream first-party producers name themselves.
   const source = block.form === 'notice' && typeof block.summary === 'string'
-    ? { kind: 'plugin', plugin, form: 'notice', summary: block.summary }
-    : { kind: 'plugin', plugin, form: block.form };
+    ? { kind: plugin, form: 'notice', summary: block.summary }
+    : { kind: plugin, form: block.form };
   return {
     id: newId(),
     role: 'user',

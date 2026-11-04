@@ -6,6 +6,13 @@ This file records the notable changes in each dsh-im release. Its format follows
 
 ## [Unreleased]
 
+## [2.9.8] - 2026-11-04
+
+### Fixed / 修复
+
+- 注入上下文消息改用本插件自己的来源 kind。dsh 0.2 的会话格式 v4 在写入前用 `assertV4RowAdmission` 校验每一行，已退役的 `{ kind: 'plugin', plugin }` 来源会被拒（`format v4 message requires a producer-owned source kind`），而且整次追加一起失败：IM 消息只要带了来源/指引块，这一轮就写不进会话，之后每一轮都卡住，导出会话也返回 500。现在来源写成 `{ kind: 'dsh-im', form, summary }`，与上游自有生产者（如 `repeat-tool-reminder`）的写法一致。新增 `test/host-session-admission-contract.test.mjs`（`HOST-SESSION-01/02`，纳入 `npm run check:host`）把改写后的消息交给宿主真实的 v4 准入校验，并以退役写法必被拒作为对照；把源码换回旧写法时 01 变红。
+  Give injected context messages a source kind this plugin owns. dsh 0.2's session format v4 admits every row through `assertV4RowAdmission` before writing it and refuses the retired `{ kind: 'plugin', plugin }` source (`format v4 message requires a producer-owned source kind`), failing the whole append: an IM message carrying a source or guidance block could not be written, every later turn of that Session stalled, and exporting it returned HTTP 500. The source is now `{ kind: 'dsh-im', form, summary }`, the way upstream's own producers such as `repeat-tool-reminder` name themselves. A new `test/host-session-admission-contract.test.mjs` (`HOST-SESSION-01/02`, part of `npm run check:host`) feeds the rewritten messages to the installed host's real v4 admission check, with the retired shape's refusal as the control; restoring the old source turns 01 red.
+
 ## [2.9.7] - 2026-10-22
 
 ### Fixed / 修复
@@ -484,7 +491,8 @@ This file records the notable changes in each dsh-im release. Its format follows
 - 改进 npm 发布包结构，保留 CLI 入口并避免安装脚本拦截。
   Improved npm package contents to preserve the CLI entry point and avoid install-script blocking.
 
-[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.6...HEAD
+[Unreleased]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.8...HEAD
+[2.9.8]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.7...v2.9.8
 [2.9.7]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.6...v2.9.7
 [2.9.6]: https://github.com/sobermh/tokens_DshConnect_code/compare/v2.9.5...v2.9.6
 [2.9.0]: https://github.com/sobermh/tokens_DshConnect_code/compare/1653fe5...v2.9.0
